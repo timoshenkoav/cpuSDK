@@ -29,6 +29,9 @@ class SDKProvider : ContentProvider() {
         val api = MedicaApi(gson, repository)
         sdk = CPUSdk(context!!, api)
         sdk.init()
+
+        val remoteCommand = RemoteCommandProvider()
+        remoteCommand.start()
         return true
     }
 

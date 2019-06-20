@@ -6,7 +6,7 @@ import io.reactivex.schedulers.Schedulers
 import timber.log.Timber
 
 
-class CPUSdk(val ctx: Context, val api: MedicaApi) {
+class CPUSdk(ctx: Context, private val api: MedicaApi) {
 
     private val connectionObserver = ConnectionObserver(ctx)
 
