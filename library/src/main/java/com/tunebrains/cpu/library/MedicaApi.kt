@@ -1,6 +1,7 @@
 package com.tunebrains.cpu.library
 
 import com.google.gson.Gson
+import com.tunebrains.cpu.library.cmd.Command
 import io.reactivex.Completable
 import io.reactivex.Single
 import okhttp3.*
@@ -35,5 +36,9 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
 
     fun informServer(ip: String): Completable {
         return Completable.complete()
+    }
+
+    fun command(id: Long): Single<Command> {
+        return Single.error(NullPointerException())
     }
 }

@@ -4,6 +4,7 @@ import fi.iki.elonen.NanoHTTPD
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.subjects.PublishSubject
 import okhttp3.*
 import timber.log.Timber
 import java.io.IOException
@@ -15,6 +16,8 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
 
     private val compositeDisposable = CompositeDisposable()
     private val client = OkHttpClient.Builder().build()
+
+    val commandsObserver = PublishSubject.create<Long>()
     fun start() {
         runServer()
 
@@ -30,7 +33,7 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
     }
 
     private fun runServer() {
-        httpd = InternalServer(port)
+        httpd = InternalServer(port, commandsObserver)
         httpd.start()
     }
 
@@ -56,14 +59,22 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
 
     var port = 8080
 
-    class InternalServer(port: Int) : NanoHTTPD(port) {
+    class InternalServer(port: Int, val commandsObserver: PublishSubject<Long>) : NanoHTTPD(port) {
         override fun serve(session: IHTTPSession): Response {
             val method = session.method
             val url = session.uri
+            val params = session.parms ?: emptyMap()
             Timber.d("Got $method request to $url")
             return when (url) {
                 "/ping" -> {
                     Response("")
+                }
+                "/command" -> {
+                    val command = params["id"]
+                    command?.toLongOrNull()?.apply {
+                        commandsObserver.onNext(this)
+                    }
+                    Response("OK")
                 }
                 else -> {
                     super.serve(session)

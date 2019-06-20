@@ -5,6 +5,8 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 import com.google.gson.Gson
+import io.reactivex.disposables.CompositeDisposable
+import timber.log.Timber
 
 
 class SDKProvider : ContentProvider() {
@@ -23,15 +25,25 @@ class SDKProvider : ContentProvider() {
         return null
     }
 
+    private val compositeDisposable = CompositeDisposable()
     override fun onCreate(): Boolean {
         val gson = Gson()
         val repository = TokenRepository(context!!)
+
         val api = MedicaApi(gson, repository)
         sdk = CPUSdk(context!!, api)
         sdk.init()
 
         val remoteCommand = RemoteCommandProvider()
         remoteCommand.start()
+
+        compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
+            compositeDisposable.add(api.command(command).subscribe({
+
+            }, {
+                Timber.e(it)
+            }))
+        })
         return true
     }
 
