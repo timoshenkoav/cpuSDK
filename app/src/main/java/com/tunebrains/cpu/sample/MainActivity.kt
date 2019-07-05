@@ -3,12 +3,15 @@ package com.tunebrains.cpu.sample
 import android.Manifest
 import android.os.Bundle
 import android.os.Environment
+import android.text.Html
+import android.view.LayoutInflater
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.tbruyelle.rxpermissions2.RxPermissions
 import com.tunebrains.cpu.library.cmd.DbHelper
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.view_add_param.view.*
 import timber.log.Timber
 import java.io.FilenameFilter
 
@@ -18,6 +21,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val FILE_REQUEST_CODE = 0x100
     }
+
+    val params = mutableMapOf<String, Any>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,14 +36,35 @@ class MainActivity : AppCompatActivity() {
             }
         }
         btnExecute.setOnClickListener {
-            if (dexFile.text.toString().isNotEmpty()) {
-                DbHelper.insertCommand(this, 1, dexFile.text.toString()).subscribe {
-                    Timber.d("Command inserted")
-                }
+            if (dexFile.text.toString().isNotEmpty() && edCommandClass.text.isNotEmpty()) {
+
+                DbHelper.insertCommand(this, 1, dexFile.text.toString(), edCommandClass.text.toString(), params)
+                    .subscribe {
+                        Timber.d("Command inserted")
+                    }
             } else {
-                showMessage("Select dex file")
+                showMessage("Select dex file and fill class name to run")
             }
         }
+        addParam.setOnClickListener {
+            AlertDialog.Builder(this).apply {
+                val root = LayoutInflater.from(this@MainActivity).inflate(R.layout.view_add_param, null)
+                setView(root)
+                setPositiveButton(android.R.string.ok) { _, _ ->
+                    params[root.edKey.text.toString()] = root.edValue.text.toString()
+                    updateParams()
+
+                }
+            }.show()
+        }
+        btnClear.setOnClickListener {
+            params.clear()
+            updateParams()
+        }
+    }
+
+    private fun updateParams() {
+        commandParams.text = Html.fromHtml(params.map { "<b>${it.key}</b>: ${it.value}" }.joinToString("\n"))
     }
 
     private fun showMessage(mes: String) {

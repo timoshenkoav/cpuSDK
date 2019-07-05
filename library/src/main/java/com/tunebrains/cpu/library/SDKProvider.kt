@@ -9,8 +9,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import com.brobwind.bronil.ProxyServer
 import com.google.gson.Gson
-import com.tunebrains.cpu.library.cmd.CommandDownloader
-import com.tunebrains.cpu.library.cmd.ServerCommand
+import com.tunebrains.cpu.library.cmd.*
 import com.tunebrains.cpu.library.db.CommandDb
 import io.reactivex.disposables.CompositeDisposable
 import timber.log.Timber
@@ -38,6 +37,8 @@ class SDKProvider : ContentProvider() {
         sUriMatcher.apply {
             addURI(authority(context!!), "commands", 1)
             addURI(authority(context!!), "commands/#", 2)
+            addURI(authority(context!!), "results", 3)
+            addURI(authority(context!!), "results/#", 4)
         }
         val gson = Gson()
         val repository = TokenRepository(context!!)
@@ -48,8 +49,11 @@ class SDKProvider : ContentProvider() {
 
         val remoteCommand = RemoteCommandProvider()
         remoteCommand.start()
-        val commandDownloader = CommandDownloader(context!!, api)
+        val commandDownloader = CommandDownloader(context!!, gson, api)
         commandDownloader.start()
+
+        val commandExecutor = CommandExecutor(context!!, gson, CommandHandler(context))
+        commandExecutor.start()
 
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
             Timber.d("Got server command id $command")
@@ -68,14 +72,7 @@ class SDKProvider : ContentProvider() {
 
 
     private fun insertCommand(it: ServerCommand) {
-        val contentValues = ContentValues()
-        contentValues.put("_id", it.id)
-        contentValues.put("_dex_url", it.dexUrl)
-        contentValues.put("_status", 0)
-        context!!.contentResolver.insert(
-            contentUri(context!!).buildUpon().appendPath("commands").build(),
-            contentValues
-        )
+        DbHelper.insertCommand(context!!, it.id, it.dex, it.className, it.arguments)
     }
 
     override fun insert(uri: Uri, values: ContentValues): Uri? {
@@ -84,6 +81,13 @@ class SDKProvider : ContentProvider() {
                 val id =
                     db.writableDatabase.insertWithOnConflict("_commands", null, values, SQLiteDatabase.CONFLICT_REPLACE)
                 val url = contentUri(context!!).buildUpon().appendPath("commands").appendPath(id.toString()).build()
+                context!!.contentResolver.notifyChange(url, null)
+                return url
+            }
+            4 -> {
+                val id =
+                    db.writableDatabase.insertWithOnConflict("_results", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+                val url = contentUri(context!!).buildUpon().appendPath("results").appendPath(id.toString()).build()
                 context!!.contentResolver.notifyChange(url, null)
                 return url
             }
@@ -108,6 +112,17 @@ class SDKProvider : ContentProvider() {
                     "_commands",
                     projection,
                     "_id=?",
+                    arrayOf(uri.lastPathSegment),
+                    null,
+                    null,
+                    null
+                )
+            }
+            4 -> {
+                db.readableDatabase.query(
+                    "_results",
+                    projection,
+                    "_command_id=?",
                     arrayOf(uri.lastPathSegment),
                     null,
                     null,
