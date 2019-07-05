@@ -5,20 +5,20 @@ import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import com.google.gson.Gson
 import com.tunebrains.cpu.dexlibrary.CommandResult
+import com.tunebrains.cpu.library.IMedicaApi
 import com.tunebrains.cpu.library.MedicaApi
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import timber.log.Timber
 
+interface ISDKSource {
+    fun observe(): Observable<LocalCommand>
+}
 
-abstract class CommandProcessor(val context: Context, val gson: Gson) {
-    val compositeDisposable = CompositeDisposable()
-    abstract fun start()
-
-    protected fun observe(): Observable<LocalCommand> {
+class SDKSource(val context: Context, val dbHelper: IDbHelper) : ISDKSource {
+    override fun observe(): Observable<LocalCommand> {
         return Observable.create { emitter ->
             context.contentResolver.registerContentObserver(
                 SDKProvider.contentUri(context).buildUpon().appendPath("commands").build(),
@@ -27,7 +27,7 @@ abstract class CommandProcessor(val context: Context, val gson: Gson) {
                     override fun onChange(selfChange: Boolean, uri: Uri) {
                         super.onChange(selfChange, uri)
                         Timber.d("Got notification from SDKProvider on $uri")
-                        val localCommand = DbHelper.localCommand(context, uri.lastPathSegment, gson)
+                        val localCommand = dbHelper.localCommand(uri.lastPathSegment)
                         Timber.d("Loaded local command $localCommand")
                         localCommand?.let {
                             emitter.onNext(it)
@@ -36,19 +36,24 @@ abstract class CommandProcessor(val context: Context, val gson: Gson) {
                 })
         }
     }
-
 }
 
-class CommandEnqueuer(context: Context, gson: Gson, private val api: MedicaApi) : CommandProcessor(context, gson) {
+abstract class CommandProcessor(val context: Context, val source: ISDKSource, val dbHelper: IDbHelper) {
+    val compositeDisposable = CompositeDisposable()
+    abstract fun start()
+}
+
+class CommandEnqueuer(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
+    CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(observe().filter {
+        compositeDisposable.add(source.observe().filter {
             it.status == LocalCommandStatus.NONE
         }.flatMap { command ->
             api.command(command).toObservable().doOnError {
                 Timber.e(it)
             }.onErrorReturnItem(LocalCommand.ERROR)
         }.filter { it.status != LocalCommandStatus.ERROR }.flatMap {
-            DbHelper.commandEnqueud(context, it, gson).toObservable<Unit>()
+            dbHelper.commandEnqueud(it).toObservable<Unit>()
         }.subscribe({
             Timber.d("Command enqueued")
         }, {
@@ -58,16 +63,17 @@ class CommandEnqueuer(context: Context, gson: Gson, private val api: MedicaApi) 
 
 }
 
-class CommandDownloader(context: Context, gson: Gson, private val api: MedicaApi) : CommandProcessor(context, gson) {
+class CommandDownloader(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
+    CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(observe().filter {
+        compositeDisposable.add(source.observe().filter {
             it.status == LocalCommandStatus.QUEUED
         }.flatMap { command ->
             api.downloadCommand(command, context.cacheDir).toObservable().doOnError {
                 Timber.e(it)
             }.onErrorReturnItem(LocalCommand.ERROR)
         }.filter { it.status != LocalCommandStatus.ERROR }.flatMap {
-            DbHelper.commandDownloaded(context, it).toObservable<Unit>()
+            dbHelper.commandDownloaded(it).toObservable<Unit>()
         }.subscribe({
             Timber.d("Command downloaded")
         }, {
@@ -77,9 +83,10 @@ class CommandDownloader(context: Context, gson: Gson, private val api: MedicaApi
 
 }
 
-class CommandExecutor(context: Context, gson: Gson, val handler: CommandHandler) : CommandProcessor(context, gson) {
+class CommandExecutor(context: Context, val handler: CommandHandler, source: ISDKSource, dbHelper: IDbHelper) :
+    CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(observe().filter {
+        compositeDisposable.add(source.observe().filter {
             it.status == LocalCommandStatus.DOWNLOADED
         }.flatMapSingle {
             handler.execute(it, context.cacheDir).doOnError {
@@ -93,9 +100,24 @@ class CommandExecutor(context: Context, gson: Gson, val handler: CommandHandler)
                 )
             )
         }.filter { it.command.status != LocalCommandStatus.ERROR }.flatMapCompletable {
-            DbHelper.commandExecuted(context, it.command, it.result, gson)
+            dbHelper.commandExecuted(it.command, it.result)
         }.subscribe({
             Timber.d("Command executed")
+        }, {
+            Timber.e(it)
+        }))
+    }
+}
+
+class CommandReporter(context: Context, private val api: MedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
+    CommandProcessor(context, source, dbHelper) {
+    override fun start() {
+        compositeDisposable.add(source.observe().filter {
+            it.status == LocalCommandStatus.EXECUTED
+        }.flatMapCompletable {
+            api.reportCommand(it).onErrorComplete()
+        }.subscribe({
+            Timber.d("Command reported")
         }, {
             Timber.e(it)
         }))

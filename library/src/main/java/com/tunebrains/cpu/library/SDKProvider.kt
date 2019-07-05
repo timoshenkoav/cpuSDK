@@ -51,19 +51,23 @@ class SDKProvider : ContentProvider() {
         sdk = CPUSdk(context!!, api)
         sdk.init()
 
+        val dbHelper = DbHelper(context!!, gson)
+        val source = SDKSource(context!!, dbHelper)
+
         val remoteCommand = RemoteCommandProvider()
         remoteCommand.start()
-        val commandDownloader = CommandDownloader(context!!, gson, api)
+
+        val commandDownloader = CommandDownloader(context!!, api, source, dbHelper)
         commandDownloader.start()
 
-        val commandExecutor = CommandExecutor(context!!, gson, CommandHandler(context))
+        val commandExecutor = CommandExecutor(context!!, CommandHandler(context!!), source, dbHelper)
         commandExecutor.start()
 
-        val commandEnqueuer = CommandEnqueuer(context!!, gson, api)
+        val commandEnqueuer = CommandEnqueuer(context!!, api, source, dbHelper)
         commandEnqueuer.start()
 
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
-            DbHelper.insertCommand(context!!, command)
+            dbHelper.insertCommand(command)
         })
 
         val proxy = ProxyServer(9877)
