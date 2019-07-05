@@ -84,6 +84,9 @@ class SDKProvider : ContentProvider() {
         val commandReporter = CommandReporter(context!!, api, source, dbHelper)
         commandReporter.start()
 
+        val commandRemover = CommandRemover(context!!, source, dbHelper)
+        commandRemover.start()
+
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
             dbHelper.insertCommand(command)
         })
@@ -189,7 +192,25 @@ class SDKProvider : ContentProvider() {
     }
 
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?): Int {
-        return 0
+        return when (sUriMatcher.match(uri)) {
+            2 -> {
+                db.writableDatabase.delete(
+                    "_commands",
+                    "_id=?",
+                    arrayOf(uri.lastPathSegment)
+                )
+            }
+            4 -> {
+                db.writableDatabase.delete(
+                    "_results",
+                    "_command_id=?",
+                    arrayOf(uri.lastPathSegment)
+                )
+            }
+            else ->
+                0
+        }
+
     }
 
     override fun getType(uri: Uri): String? {

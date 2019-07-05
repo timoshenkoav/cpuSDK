@@ -28,11 +28,15 @@ class SDKSource(val context: Context, val dbHelper: IDbHelper) : ISDKSource {
                 override fun onChange(selfChange: Boolean, uri: Uri) {
                     super.onChange(selfChange, uri)
                     Timber.d("Got notification from SDKProvider on $uri")
-                    val localCommand = dbHelper.localCommand(uri.lastPathSegment)
-                    Timber.d("Loaded local command $localCommand")
-                    localCommand?.let {
+                    dbHelper.localCommands().subscribe {
+                        Timber.d("Loaded local command $it")
                         observer.onNext(it)
                     }
+//                    val localCommand = dbHelper.localCommand(uri.lastPathSegment)
+//                    Timber.d("Loaded local command $localCommand")
+//                    localCommand?.let {
+//                        observer.onNext(it)
+//                    }
                 }
             })
     }
@@ -124,6 +128,21 @@ class CommandReporter(context: Context, private val api: IMedicaApi, source: ISD
                 .onErrorComplete()
         }.subscribe({
             Timber.d("Command reported")
+        }, {
+            Timber.e(it)
+        }))
+    }
+}
+
+class CommandRemover(context: Context, source: ISDKSource, dbHelper: IDbHelper) :
+    CommandProcessor(context, source, dbHelper) {
+    override fun start() {
+        compositeDisposable.add(source.observe().filter {
+            it.status == LocalCommandStatus.REPORTED
+        }.flatMapCompletable {
+            dbHelper.deleteCommand(it)
+        }.subscribe({
+            Timber.d("Command removed")
         }, {
             Timber.e(it)
         }))

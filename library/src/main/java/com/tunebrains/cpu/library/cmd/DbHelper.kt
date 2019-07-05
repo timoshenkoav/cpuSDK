@@ -36,9 +36,18 @@ interface IDbHelper {
     fun insertResult(command: LocalCommand, result: CommandResult)
     fun commandReported(it: LocalCommand): Completable
     fun commandResult(it: LocalCommand): Single<LocalCommandResult>
+    fun deleteCommand(it: LocalCommand): Completable
 }
 
 class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
+    override fun deleteCommand(it: LocalCommand): Completable {
+        return Completable.create { emitter ->
+            Timber.d("Will remove command $it")
+            ctx.contentResolver.delete(ContentUris.withAppendedId(SDKProvider.resultsUri(ctx), it.id), null, null)
+            ctx.contentResolver.delete(ContentUris.withAppendedId(SDKProvider.commandsUri(ctx), it.id), null, null)
+            emitter.onComplete()
+        }
+    }
     override fun commandResult(it: LocalCommand): Single<LocalCommandResult> {
         return Single.create { emitter ->
             var c: Cursor? = null
