@@ -48,14 +48,12 @@ class CommandEnqueuer(context: Context, gson: Gson, private val api: MedicaApi) 
             it.status == LocalCommandStatus.NONE
         }.flatMap { command ->
             api.command(command).toObservable()
-        }.map {
-            RxResult(it, null)
         }.onErrorReturn {
             RxResult(null, it)
         }.filter {
             it.data != null
-        }.flatMapCompletable {
-            DbHelper.commandEnqueud(context, it.data!!.data!!, gson)
+        }.flatMap {
+            DbHelper.commandEnqueud(context, it.data!!, gson).toObservable<Unit>()
         }.subscribe({
             Timber.d("Command enqueued")
         }, {
@@ -69,10 +67,10 @@ class CommandDownloader(context: Context, gson: Gson, private val api: MedicaApi
     override fun start() {
         compositeDisposable.add(observe().filter {
             it.status == LocalCommandStatus.QUEUED
-        }.flatMapSingle { command ->
-            api.downloadCommand(command, context.cacheDir)
-        }.flatMapCompletable {
-            DbHelper.commandDownloaded(context, it)
+        }.flatMap { command ->
+            api.downloadCommand(command, context.cacheDir).toObservable()
+        }.flatMap {
+            DbHelper.commandDownloaded(context, it.data!!).toObservable<Unit>()
         }.subscribe({
             Timber.d("Command downloaded")
         }, {
