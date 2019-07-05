@@ -105,7 +105,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
                 override fun onResponse(call: Call, response: Response) {
                     if (response.isSuccessful) {
                         try {
-                            val tmp = File.createTempFile("cmd", "dex", root)
+                            val tmp = File.createTempFile("cmd", ".dex", root)
                             val fos = FileOutputStream(tmp)
                             response.body?.let {
                                 it.byteStream().copyTo(fos)

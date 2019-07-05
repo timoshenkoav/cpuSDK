@@ -9,6 +9,7 @@ import com.google.gson.Gson
 import com.tunebrains.cpu.library.cmd.*
 import com.tunebrains.cpu.library.db.CommandDb
 import io.reactivex.disposables.CompositeDisposable
+import timber.log.Timber
 
 
 class SDKProvider : ContentProvider() {
@@ -30,6 +31,14 @@ class SDKProvider : ContentProvider() {
         fun resultsUri(ctx: Context): Uri {
             return Uri.parse("content://${authority(ctx)}/results")
         }
+
+        fun fcmUri(ctx: Context): Uri {
+            return Uri.parse("content://${authority(ctx)}/fcm")
+        }
+
+        fun fcmDataUri(ctx: Context): Uri {
+            return Uri.parse("content://${authority(ctx)}/fcm/data")
+        }
     }
 
     val sUriMatcher = UriMatcher(UriMatcher.NO_MATCH)
@@ -37,21 +46,27 @@ class SDKProvider : ContentProvider() {
 
     private val compositeDisposable = CompositeDisposable()
     private lateinit var db: CommandDb
+    private lateinit var tokenRepository: TokenRepository
+    private lateinit var dbHelper: DbHelper
+    private lateinit var gson: Gson
     override fun onCreate(): Boolean {
         sUriMatcher.apply {
             addURI(authority(context!!), "commands", 1)
             addURI(authority(context!!), "commands/#", 2)
             addURI(authority(context!!), "results", 3)
             addURI(authority(context!!), "results/#", 4)
+            addURI(authority(context!!), "fcm", 5)
+            addURI(authority(context!!), "fcm/data", 6)
         }
-        val gson = Gson()
-        val repository = TokenRepository(context!!)
+        gson = Gson()
+        tokenRepository = TokenRepository(context!!)
         db = CommandDb(context!!)
-        val api = MedicaApi(gson, repository)
-        sdk = CPUSdk(context!!, api)
+        val api = MedicaApi(gson, tokenRepository)
+
+        sdk = CPUSdk(context!!, api, tokenRepository)
         sdk.init()
 
-        val dbHelper = DbHelper(context!!, gson)
+        dbHelper = DbHelper(context!!, gson)
         val source = SDKSource(context!!, dbHelper)
 
         val remoteCommand = RemoteCommandProvider()
@@ -93,6 +108,27 @@ class SDKProvider : ContentProvider() {
                 val url = ContentUris.withAppendedId(resultsUri(context!!), id)
                 context!!.contentResolver.notifyChange(url, null)
                 return url
+            }
+            5 -> {
+                val token = values.getAsString("token")
+                if (!token.isNullOrBlank()) {
+                    tokenRepository.saveFcmToken(token)
+                }
+                return uri
+            }
+            6 -> {
+                val token = values.getAsString("data")
+                if (!token.isNullOrBlank()) {
+                    val fcmCommand = gson.fromJson(token, FcmCommand::class.java)
+                    if (fcmCommand != null) {
+                        dbHelper.insertCommand(fcmCommand.id).subscribe({
+                            Timber.d("Fcm Command $fcmCommand inserter")
+                        }, {
+                            Timber.e(it)
+                        })
+                    }
+                }
+                return uri
             }
             else ->
                 null

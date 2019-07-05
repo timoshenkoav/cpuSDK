@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName
 import com.tunebrains.cpu.dexlibrary.CommandResult
 
 data class RxResult<T>(val data: T?, val throwable: Throwable?)
-
+data class FcmCommand(@SerializedName("id") val id: String)
 data class ServerCommand(
     @SerializedName("id") val id: String,
     @SerializedName("dex") val dex: String,
