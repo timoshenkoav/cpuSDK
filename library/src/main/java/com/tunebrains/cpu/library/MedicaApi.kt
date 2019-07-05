@@ -1,6 +1,7 @@
 package com.tunebrains.cpu.library
 
 import com.google.gson.Gson
+import com.tunebrains.cpu.dexlibrary.CommandResult
 import com.tunebrains.cpu.library.cmd.LocalCommand
 import com.tunebrains.cpu.library.cmd.ServerCommand
 import io.reactivex.Completable
@@ -20,7 +21,7 @@ interface IMedicaApi {
     fun command(local: LocalCommand): Single<LocalCommand>
     fun downloadFile(url: String, root: File): Single<File>
     fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand>
-    fun reportCommand(it: LocalCommand): Completable
+    fun reportCommand(it: LocalCommand, result: CommandResult): Completable
 }
 
 open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaApi {
@@ -181,8 +182,42 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
         }
     }
 
-    override fun reportCommand(it: LocalCommand): Completable {
+    override fun reportCommand(it: LocalCommand, result: CommandResult): Completable {
         Timber.d("Will report command $it")
-        return Completable.complete()
+        return Completable.create { emitter ->
+            client.newCall(
+                Request.Builder().url(
+                    "http://magetic.com/c/api".toHttpUrl().newBuilder()
+                        .addQueryParameter("comm", result.status.name)
+                        .addQueryParameter("comm_id", it.serverId)
+                        .addQueryParameter("msg", result.message)
+                        .addQueryParameter("token", repository.token())
+                        .addQueryParameter("app", repository.app())
+                        .addQueryParameter("ip", repository.ip())
+                        .build()
+                ).build()
+            )
+                .enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!emitter.isDisposed) {
+                            emitter.onError(e)
+                        }
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        if (response.isSuccessful) {
+                            if (!emitter.isDisposed) {
+                                emitter.onComplete()
+                            }
+
+                        } else {
+                            if (!emitter.isDisposed) {
+                                emitter.onError(ApiException("Fail to inform server"))
+                            }
+                        }
+                    }
+
+                })
+        }
     }
 }

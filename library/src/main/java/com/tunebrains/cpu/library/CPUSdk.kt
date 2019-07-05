@@ -62,9 +62,9 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
                     Timber.e(task.exception, "getInstanceId failed")
                     return@OnCompleteListener
                 }
-                // Get new Instance ID token
                 val token = task.result!!.token
                 Timber.d("Token received: $token")
+                fcmNewToken(ctx, token)
             })
     }
 
@@ -107,13 +107,13 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
         connectionObserver.start()
     }
 
-    companion object {
-        fun fcmNewToken(ctx: Context, token: String) {
-            val values = ContentValues()
-            values.put("token", token)
-            ctx.contentResolver.insert(SDKProvider.fcmUri(ctx), values)
-        }
+    fun fcmNewToken(ctx: Context, token: String) {
+        val values = ContentValues()
+        values.put("token", token)
+        ctx.contentResolver.insert(SDKProvider.fcmUri(ctx), values)
+    }
 
+    companion object {
         fun fcmNewData(ctx: Context, sdkData: String) {
             try {
                 val values = ContentValues()

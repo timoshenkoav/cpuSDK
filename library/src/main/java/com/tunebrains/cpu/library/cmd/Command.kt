@@ -26,6 +26,7 @@ enum class LocalCommandStatus(val status: Int) {
 
 }
 
+//data class LocalCommandResult(val cmd:LocalCommand, val result:CommandResult)
 data class LocalCommand(
     val id: Long,
     val serverId: String,

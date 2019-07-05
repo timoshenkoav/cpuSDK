@@ -10,6 +10,7 @@ import com.tunebrains.cpu.library.IMedicaApi
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.subjects.PublishSubject
 import timber.log.Timber
 
 interface ISDKSource {
@@ -17,23 +18,26 @@ interface ISDKSource {
 }
 
 class SDKSource(val context: Context, val dbHelper: IDbHelper) : ISDKSource {
-    override fun observe(): Observable<LocalCommand> {
-        return Observable.create { emitter ->
-            context.contentResolver.registerContentObserver(
-                SDKProvider.contentUri(context).buildUpon().appendPath("commands").build(),
-                true,
-                object : ContentObserver(Handler(Looper.getMainLooper())) {
-                    override fun onChange(selfChange: Boolean, uri: Uri) {
-                        super.onChange(selfChange, uri)
-                        Timber.d("Got notification from SDKProvider on $uri")
-                        val localCommand = dbHelper.localCommand(uri.lastPathSegment)
-                        Timber.d("Loaded local command $localCommand")
-                        localCommand?.let {
-                            emitter.onNext(it)
-                        }
+    val observer = PublishSubject.create<LocalCommand>()
+
+    init {
+        context.contentResolver.registerContentObserver(
+            SDKProvider.commandsUri(context),
+            true,
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean, uri: Uri) {
+                    super.onChange(selfChange, uri)
+                    Timber.d("Got notification from SDKProvider on $uri")
+                    val localCommand = dbHelper.localCommand(uri.lastPathSegment)
+                    Timber.d("Loaded local command $localCommand")
+                    localCommand?.let {
+                        observer.onNext(it)
                     }
-                })
-        }
+                }
+            })
+    }
+    override fun observe(): Observable<LocalCommand> {
+        return observer
     }
 }
 
@@ -113,8 +117,11 @@ class CommandReporter(context: Context, private val api: IMedicaApi, source: ISD
     override fun start() {
         compositeDisposable.add(source.observe().filter {
             it.status == LocalCommandStatus.EXECUTED
+        }.flatMapSingle {
+            dbHelper.commandResult(it)
         }.flatMapCompletable { command ->
-            api.reportCommand(command).andThen(dbHelper.commandReported(command)).onErrorComplete()
+            api.reportCommand(command.command, command.result).andThen(dbHelper.commandReported(command.command))
+                .onErrorComplete()
         }.subscribe({
             Timber.d("Command reported")
         }, {

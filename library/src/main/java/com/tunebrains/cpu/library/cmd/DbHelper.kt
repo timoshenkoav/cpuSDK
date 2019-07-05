@@ -1,5 +1,6 @@
 package com.tunebrains.cpu.library.cmd
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
@@ -8,6 +9,7 @@ import com.tunebrains.cpu.dexlibrary.CommandResult
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Completable
 import io.reactivex.Observable
+import io.reactivex.Single
 import io.reactivex.schedulers.Schedulers
 import timber.log.Timber
 
@@ -23,7 +25,6 @@ interface IDbHelper {
 
     fun localCommands(): Observable<LocalCommand>
     fun localCommand(id: String): LocalCommand?
-    fun mapCursor(c: Cursor): LocalCommand
     fun commandDownloaded(command: LocalCommand): Completable
     fun commandEnqueud(command: LocalCommand): Completable
     fun updateStatus(
@@ -34,9 +35,37 @@ interface IDbHelper {
     fun commandExecuted(command: LocalCommand, result: CommandResult): Completable
     fun insertResult(command: LocalCommand, result: CommandResult)
     fun commandReported(it: LocalCommand): Completable
+    fun commandResult(it: LocalCommand): Single<LocalCommandResult>
 }
 
 class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
+    override fun commandResult(it: LocalCommand): Single<LocalCommandResult> {
+        return Single.create { emitter ->
+            var c: Cursor? = null
+            try {
+                c = ctx.contentResolver.query(
+                    ContentUris.withAppendedId(SDKProvider.resultsUri(ctx), it.id),
+                    null,
+                    null,
+                    null,
+                    null
+                )
+                if (c.moveToFirst()) {
+                    val result = mapCommandResult(c)
+                    emitter.onSuccess(LocalCommandResult(it, result))
+                } else {
+                    emitter.onError(NullPointerException())
+                }
+            } catch (ex: Exception) {
+                Timber.e(ex)
+                emitter.onError(ex)
+            } finally {
+                c?.close()
+            }
+
+        }
+    }
+
     override fun insertCommand(serverId: String): Completable {
         return Completable.create { emitter ->
             val contentValues = ContentValues()
@@ -83,7 +112,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
                     null
                 )
                 while (c.moveToNext()) {
-                    val localCommand = mapCursor(c)
+                    val localCommand = mapLocalCommand(c)
                     emitter.onNext(localCommand)
                 }
                 emitter.onComplete()
@@ -108,7 +137,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
                 null
             )
             if (c.moveToFirst()) {
-                return mapCursor(c)
+                return mapLocalCommand(c)
             }
         } catch (ex: Exception) {
             Timber.e(ex)
@@ -119,7 +148,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
 
     }
 
-    override fun mapCursor(c: Cursor): LocalCommand {
+    private fun mapLocalCommand(c: Cursor): LocalCommand {
         val id = c.getLong(c.getColumnIndex("_id"))
         val serverId = c.getString(c.getColumnIndex("_server_id"))
         val dexUrl = c.getString(c.getColumnIndex("_dex_file"))
@@ -129,6 +158,21 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
         return LocalCommand(id, serverId, dexUrl, serverCommand, LocalCommandStatus.valueOf(status)!!)
     }
 
+    private fun mapCommandResult(c: Cursor): CommandResult {
+        val data = c.getString(c.getColumnIndex("_data"))
+        val result = gson.fromJson(data, CommandResult::class.java)
+        return result
+    }
+
+    override fun insertResult(command: LocalCommand, result: CommandResult) {
+        val contentValues = ContentValues()
+        contentValues.put("_command_id", command.id)
+        contentValues.put("_data", gson.toJson(result))
+        ctx.contentResolver.insert(
+            SDKProvider.contentUri(ctx).buildUpon().appendPath("results").appendPath(command.id.toString()).build(),
+            contentValues
+        )
+    }
     override fun commandDownloaded(command: LocalCommand): Completable {
         Timber.d("Mark command downloaded $command")
         return Completable.create { emitter ->
@@ -184,16 +228,6 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
         }
     }
 
-    override fun insertResult(command: LocalCommand, result: CommandResult) {
-        val contentValues = ContentValues()
-        contentValues.put("_data", gson.toJson(result))
-        ctx.contentResolver.update(
-            SDKProvider.contentUri(ctx).buildUpon().appendPath("results").appendPath(command.id.toString()).build(),
-            contentValues,
-            null,
-            null
-        )
-    }
 
     override fun commandReported(command: LocalCommand): Completable {
         return Completable.create { emitter ->

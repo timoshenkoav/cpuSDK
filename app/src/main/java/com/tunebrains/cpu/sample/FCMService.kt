@@ -22,8 +22,5 @@ class FCMService : FirebaseMessagingService() {
     override fun onNewToken(p0: String?) {
         super.onNewToken(p0)
         Timber.d("On new token $p0")
-        p0?.let {
-            CPUSdk.fcmNewToken(this, it)
-        }
     }
 }

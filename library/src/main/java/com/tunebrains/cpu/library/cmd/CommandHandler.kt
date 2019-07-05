@@ -11,11 +11,13 @@ import java.io.File
 class CommandHandler(val ctx: Context) {
     fun execute(cmd: LocalCommand, root: File): Single<LocalCommandResult> {
         return (Single.create<LocalCommandResult> { emitter ->
+            Timber.d("Will execute command $cmd")
             val externalCmd =
                 DexPluginLoader.loadCommand(ctx, cmd.dexPath, cmd.server?.className, root)
             if (externalCmd != null) {
                 try {
                     val result = externalCmd.execute(cmd.server?.arguments)
+                    Timber.d("Executed command $cmd result: $result")
                     if (result != null) {
                         emitter.onSuccess(LocalCommandResult(cmd, result))
                     } else {

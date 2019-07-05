@@ -54,8 +54,16 @@ class TokenRepository(val ctx: Context) {
         return "random id"
     }
 
+    fun ip(): String {
+        return prefs.getString(PREF_IP, "") ?: ""
+    }
+
     fun saveIp(ip: String) {
         prefs.edit().putString(PREF_IP, ip).apply()
         ipEvents.onNext(ip)
+    }
+
+    fun app(): String {
+        return ctx.packageName
     }
 }

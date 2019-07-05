@@ -81,7 +81,7 @@ class SDKProvider : ContentProvider() {
         val commandEnqueuer = CommandEnqueuer(context!!, api, source, dbHelper)
         commandEnqueuer.start()
 
-        val commandReporter = CommandReporter(context, api, source, dbHelper)
+        val commandReporter = CommandReporter(context!!, api, source, dbHelper)
         commandReporter.start()
 
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
@@ -90,6 +90,7 @@ class SDKProvider : ContentProvider() {
 
         val proxy = ProxyServer(9877)
         proxy.startServer()
+
         return true
     }
 
@@ -105,9 +106,8 @@ class SDKProvider : ContentProvider() {
             4 -> {
                 val id =
                     db.writableDatabase.insertWithOnConflict("_results", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-                val url = ContentUris.withAppendedId(resultsUri(context!!), id)
-                context!!.contentResolver.notifyChange(url, null)
-                return url
+                context!!.contentResolver.notifyChange(uri, null)
+                return uri
             }
             5 -> {
                 val token = values.getAsString("token")
