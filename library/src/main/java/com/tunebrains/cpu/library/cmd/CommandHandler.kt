@@ -12,10 +12,10 @@ class CommandHandler(val ctx: Context) {
     fun execute(cmd: LocalCommand, root: File): Single<LocalCommandResult> {
         return (Single.create<LocalCommandResult> { emitter ->
             val externalCmd =
-                DexPluginLoader.loadCommand(ctx, cmd.dexPath, cmd.server.className, root)
+                DexPluginLoader.loadCommand(ctx, cmd.dexPath, cmd.server?.className, root)
             if (externalCmd != null) {
                 try {
-                    val result = externalCmd.execute(cmd.server.arguments)
+                    val result = externalCmd.execute(cmd.server?.arguments)
                     if (result != null) {
                         emitter.onSuccess(LocalCommandResult(cmd, result))
                     } else {

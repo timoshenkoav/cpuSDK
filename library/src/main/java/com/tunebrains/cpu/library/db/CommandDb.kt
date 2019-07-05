@@ -11,7 +11,7 @@ class CommandDb(ctx: Context) : SQLiteOpenHelper(ctx, "command.db", null, 1) {
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("create TABLE _commands(_id integer primary key autoincrement, _dex_file text default '', _server text default '', _last_update int default 0, _status int default 0)")
+        db.execSQL("create TABLE _commands(_id integer primary key autoincrement, _server_id text default '',_dex_file text default '', _server text default '', _last_update int default 0, _status int default 0)")
         db.execSQL("create TABLE _results(_command_id integer primary key, _data text)")
     }
 }

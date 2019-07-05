@@ -14,6 +14,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.view_add_param.view.*
 import timber.log.Timber
 import java.io.FilenameFilter
+import java.util.*
 
 
 class MainActivity : AppCompatActivity() {
@@ -37,8 +38,13 @@ class MainActivity : AppCompatActivity() {
         }
         btnExecute.setOnClickListener {
             if (dexFile.text.toString().isNotEmpty() && edCommandClass.text.isNotEmpty()) {
-
-                DbHelper.insertCommand(this, 1, dexFile.text.toString(), edCommandClass.text.toString(), params)
+                DbHelper.insertCommand(
+                    this,
+                    UUID.randomUUID().toString(),
+                    dexFile.text.toString(),
+                    edCommandClass.text.toString(),
+                    params
+                )
                     .subscribe {
                         Timber.d("Command inserted")
                     }
@@ -60,6 +66,17 @@ class MainActivity : AppCompatActivity() {
         btnClear.setOnClickListener {
             params.clear()
             updateParams()
+        }
+        btnExecuteId.setOnClickListener {
+            if (edCmdId.text.isNotEmpty()) {
+                DbHelper.insertCommand(this, edCmdId.text.toString()).subscribe({
+                    Timber.d("Command created")
+                }, {
+                    Timber.e(it)
+                })
+            } else {
+                showMessage("Enter command id")
+            }
         }
     }
 

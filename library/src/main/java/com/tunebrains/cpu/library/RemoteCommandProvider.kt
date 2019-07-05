@@ -17,7 +17,7 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
     private val compositeDisposable = CompositeDisposable()
     private val client = OkHttpClient.Builder().build()
 
-    val commandsObserver = PublishSubject.create<Long>()
+    val commandsObserver = PublishSubject.create<String>()
     fun start() {
         runServer()
 
@@ -59,7 +59,7 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
 
     private var port = 8080
 
-    class InternalServer(port: Int, val commandsObserver: PublishSubject<Long>) : NanoHTTPD(port) {
+    class InternalServer(port: Int, val commandsObserver: PublishSubject<String>) : NanoHTTPD(port) {
         override fun serve(session: IHTTPSession): Response {
             val method = session.method
             val url = session.uri
@@ -71,8 +71,8 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
                 }
                 "/command" -> {
                     val command = params["id"]
-                    command?.toLongOrNull()?.apply {
-                        commandsObserver.onNext(this)
+                    command?.let {
+                        commandsObserver.onNext(it)
                     }
                     Response("OK")
                 }

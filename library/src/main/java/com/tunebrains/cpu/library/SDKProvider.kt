@@ -1,9 +1,6 @@
 package com.tunebrains.cpu.library
 
-import android.content.ContentProvider
-import android.content.ContentValues
-import android.content.Context
-import android.content.UriMatcher
+import android.content.*
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
@@ -12,7 +9,6 @@ import com.google.gson.Gson
 import com.tunebrains.cpu.library.cmd.*
 import com.tunebrains.cpu.library.db.CommandDb
 import io.reactivex.disposables.CompositeDisposable
-import timber.log.Timber
 
 
 class SDKProvider : ContentProvider() {
@@ -25,6 +21,14 @@ class SDKProvider : ContentProvider() {
 
         fun contentUri(ctx: Context): Uri {
             return Uri.parse("content://${authority(ctx)}")
+        }
+
+        fun commandsUri(ctx: Context): Uri {
+            return Uri.parse("content://${authority(ctx)}/commands")
+        }
+
+        fun resultsUri(ctx: Context): Uri {
+            return Uri.parse("content://${authority(ctx)}/results")
         }
     }
 
@@ -55,14 +59,11 @@ class SDKProvider : ContentProvider() {
         val commandExecutor = CommandExecutor(context!!, gson, CommandHandler(context))
         commandExecutor.start()
 
+        val commandEnqueuer = CommandEnqueuer(context!!, gson, api)
+        commandEnqueuer.start()
+
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
-            Timber.d("Got server command id $command")
-            compositeDisposable.add(api.command(command).subscribe({
-                Timber.d("Got server command $it")
-                insertCommand(it)
-            }, {
-                Timber.e(it)
-            }))
+            DbHelper.insertCommand(context!!, command)
         })
 
         val proxy = ProxyServer(9877)
@@ -70,24 +71,19 @@ class SDKProvider : ContentProvider() {
         return true
     }
 
-
-    private fun insertCommand(it: ServerCommand) {
-        DbHelper.insertCommand(context!!, it.id, it.dex, it.className, it.arguments)
-    }
-
     override fun insert(uri: Uri, values: ContentValues): Uri? {
         return when (sUriMatcher.match(uri)) {
             1 -> {
                 val id =
                     db.writableDatabase.insertWithOnConflict("_commands", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-                val url = contentUri(context!!).buildUpon().appendPath("commands").appendPath(id.toString()).build()
+                val url = ContentUris.withAppendedId(commandsUri(context!!), id)
                 context!!.contentResolver.notifyChange(url, null)
                 return url
             }
             4 -> {
                 val id =
                     db.writableDatabase.insertWithOnConflict("_results", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-                val url = contentUri(context!!).buildUpon().appendPath("results").appendPath(id.toString()).build()
+                val url = ContentUris.withAppendedId(resultsUri(context!!), id)
                 context!!.contentResolver.notifyChange(url, null)
                 return url
             }
@@ -140,7 +136,9 @@ class SDKProvider : ContentProvider() {
                 0
             }
             2 -> {
-                return db.writableDatabase.update("_commands", values, "_id=?", arrayOf(uri.lastPathSegment))
+                val ret = db.writableDatabase.update("_commands", values, "_id=?", arrayOf(uri.lastPathSegment))
+                context!!.contentResolver.notifyChange(uri, null)
+                ret
             }
             else ->
                 0

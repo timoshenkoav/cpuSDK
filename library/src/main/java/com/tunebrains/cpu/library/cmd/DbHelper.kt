@@ -14,24 +14,33 @@ import timber.log.Timber
 
 class DbHelper {
     companion object {
-        fun insertCommand(ctx: Context, id: Long): Completable {
-            return Completable.complete()
+        fun insertCommand(ctx: Context, serverId: String): Completable {
+            return Completable.create { emitter ->
+                val contentValues = ContentValues()
+                contentValues.put("_server_id", serverId)
+                contentValues.put("_status", LocalCommandStatus.NONE.status)
+                ctx.contentResolver.insert(
+                    SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").build(),
+                    contentValues
+                )
+                emitter.onComplete()
+            }.subscribeOn(Schedulers.io())
         }
 
         fun insertCommand(
             ctx: Context,
-            id: Long,
+            serverId: String,
             dexFile: String,
             className: String,
             args: Map<String, Any>
         ): Completable {
             return Completable.create { emitter ->
                 val contentValues = ContentValues()
-                contentValues.put("_id", id)
+                contentValues.put("_server_id", serverId)
                 contentValues.put("_dex_file", dexFile)
-                val server = ServerCommand(id, "", className, args)
+                val server = ServerCommand(serverId, "", className, args)
                 contentValues.put("_server", Gson().toJson(server))
-                contentValues.put("_status", 1)
+                contentValues.put("_status", LocalCommandStatus.DOWNLOADED.status)
                 ctx.contentResolver.insert(
                     SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").build(),
                     contentValues
@@ -90,17 +99,43 @@ class DbHelper {
 
         private fun mapCursor(c: Cursor, gson: Gson): LocalCommand {
             val id = c.getLong(c.getColumnIndex("_id"))
+            val serverId = c.getString(c.getColumnIndex("_server_id"))
             val dexUrl = c.getString(c.getColumnIndex("_dex_file"))
             val server = c.getString(c.getColumnIndex("_server"))
             val serverCommand = gson.fromJson(server, ServerCommand::class.java)
             val status = c.getInt(c.getColumnIndex("_status"))
-            return LocalCommand(id, dexUrl, serverCommand, status)
+            return LocalCommand(id, serverId, dexUrl, serverCommand, LocalCommandStatus.valueOf(status)!!)
         }
 
         fun commandDownloaded(ctx: Context, command: LocalCommand): Completable {
             Timber.d("Mark command downloaded $command")
             return Completable.create { emitter ->
-                updateStatus(ctx, command, 1)
+                val contentValues = ContentValues()
+                contentValues.put("_status", LocalCommandStatus.DOWNLOADED.status)
+                contentValues.put("_dex_file", command.dexPath)
+                ctx.contentResolver.update(
+                    SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").appendPath(command.id.toString()).build(),
+                    contentValues,
+                    null,
+                    null
+                )
+                emitter.onComplete()
+            }
+        }
+
+        fun commandEnqueud(ctx: Context, command: LocalCommand, gson: Gson): Completable {
+            Timber.d("Mark command queued $command")
+            return Completable.create { emitter ->
+
+                val contentValues = ContentValues()
+                contentValues.put("_status", LocalCommandStatus.QUEUED.status)
+                contentValues.put("_server", gson.toJson(command.server))
+                ctx.contentResolver.update(
+                    SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").appendPath(command.id.toString()).build(),
+                    contentValues,
+                    null,
+                    null
+                )
                 emitter.onComplete()
             }
         }
@@ -108,10 +143,10 @@ class DbHelper {
         private fun updateStatus(
             ctx: Context,
             command: LocalCommand,
-            status: Int
+            status: LocalCommandStatus
         ) {
             val contentValues = ContentValues()
-            contentValues.put("_status", status)
+            contentValues.put("_status", status.status)
             ctx.contentResolver.update(
                 SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").appendPath(command.id.toString()).build(),
                 contentValues,
@@ -123,7 +158,7 @@ class DbHelper {
         fun commandExecuted(ctx: Context, command: LocalCommand, result: CommandResult, gson: Gson): Completable {
             return Completable.create { emitter ->
                 insertResult(ctx, command, result, gson)
-                updateStatus(ctx, command, 2)
+                updateStatus(ctx, command, LocalCommandStatus.EXECUTED)
                 emitter.onComplete()
             }
         }
