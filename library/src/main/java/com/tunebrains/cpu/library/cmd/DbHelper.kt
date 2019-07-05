@@ -33,6 +33,7 @@ interface IDbHelper {
 
     fun commandExecuted(command: LocalCommand, result: CommandResult): Completable
     fun insertResult(command: LocalCommand, result: CommandResult)
+    fun commandReported(it: LocalCommand): Completable
 }
 
 class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
@@ -192,5 +193,19 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
             null,
             null
         )
+    }
+
+    override fun commandReported(command: LocalCommand): Completable {
+        return Completable.create { emitter ->
+            val contentValues = ContentValues()
+            contentValues.put("_status", LocalCommandStatus.REPORTED.status)
+            ctx.contentResolver.update(
+                SDKProvider.contentUri(ctx).buildUpon().appendPath("commands").appendPath(command.id.toString()).build(),
+                contentValues,
+                null,
+                null
+            )
+            emitter.onComplete()
+        }
     }
 }

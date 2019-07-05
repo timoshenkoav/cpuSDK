@@ -143,8 +143,6 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
 
     override fun reportCommand(it: LocalCommand): Completable {
         Timber.d("Will report command $it")
-        return Completable.create { emitter ->
-
-        }
+        return Completable.complete()
     }
 }

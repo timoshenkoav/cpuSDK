@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.gson.Gson
 import com.tbruyelle.rxpermissions2.RxPermissions
 import com.tunebrains.cpu.library.cmd.DbHelper
 import kotlinx.android.synthetic.main.activity_main.*
@@ -23,8 +24,9 @@ class MainActivity : AppCompatActivity() {
         const val FILE_REQUEST_CODE = 0x100
     }
 
-    val params = mutableMapOf<String, Any>()
+    private val params = mutableMapOf<String, Any>()
 
+    private val dbHelper = DbHelper(this, Gson())
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -38,8 +40,7 @@ class MainActivity : AppCompatActivity() {
         }
         btnExecute.setOnClickListener {
             if (dexFile.text.toString().isNotEmpty() && edCommandClass.text.isNotEmpty()) {
-                DbHelper.insertCommand(
-                    this,
+                dbHelper.insertCommand(
                     UUID.randomUUID().toString(),
                     dexFile.text.toString(),
                     edCommandClass.text.toString(),
@@ -69,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         }
         btnExecuteId.setOnClickListener {
             if (edCmdId.text.isNotEmpty()) {
-                DbHelper.insertCommand(this, edCmdId.text.toString()).subscribe({
+                dbHelper.insertCommand(edCmdId.text.toString()).subscribe({
                     Timber.d("Command created")
                 }, {
                     Timber.e(it)

@@ -3,7 +3,7 @@
         package="com.tunebrains.cpu.library">
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
-    <application>
+    <application android:usesCleartextTraffic="true">
         <provider android:authorities="${applicationId}.cpu.sdk.provider" android:name=".SDKProvider"
                   android:exported="false"/>
     </application>

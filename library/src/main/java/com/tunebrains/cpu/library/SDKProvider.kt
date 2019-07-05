@@ -66,6 +66,9 @@ class SDKProvider : ContentProvider() {
         val commandEnqueuer = CommandEnqueuer(context!!, api, source, dbHelper)
         commandEnqueuer.start()
 
+        val commandReporter = CommandReporter(context, api, source, dbHelper)
+        commandReporter.start()
+
         compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
             dbHelper.insertCommand(command)
         })

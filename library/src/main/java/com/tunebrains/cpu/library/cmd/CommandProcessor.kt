@@ -7,7 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import com.tunebrains.cpu.dexlibrary.CommandResult
 import com.tunebrains.cpu.library.IMedicaApi
-import com.tunebrains.cpu.library.MedicaApi
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
@@ -83,7 +82,7 @@ class CommandDownloader(context: Context, private val api: IMedicaApi, source: I
 
 }
 
-class CommandExecutor(context: Context, val handler: CommandHandler, source: ISDKSource, dbHelper: IDbHelper) :
+class CommandExecutor(context: Context, private val handler: CommandHandler, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
         compositeDisposable.add(source.observe().filter {
@@ -109,13 +108,13 @@ class CommandExecutor(context: Context, val handler: CommandHandler, source: ISD
     }
 }
 
-class CommandReporter(context: Context, private val api: MedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
+class CommandReporter(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
         compositeDisposable.add(source.observe().filter {
             it.status == LocalCommandStatus.EXECUTED
-        }.flatMapCompletable {
-            api.reportCommand(it).onErrorComplete()
+        }.flatMapCompletable { command ->
+            api.reportCommand(command).andThen(dbHelper.commandReported(command)).onErrorComplete()
         }.subscribe({
             Timber.d("Command reported")
         }, {
