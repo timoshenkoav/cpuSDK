@@ -2,22 +2,25 @@ package com.tunebrains.cpu.library
 
 import android.content.Context
 import android.preference.PreferenceManager
-import io.reactivex.subjects.PublishSubject
+import io.reactivex.subjects.BehaviorSubject
 import java.util.*
 
 
 data class TokenInfo(val token: String, val fcmToken: String)
-class TokenRepository(ctx: Context) {
+class TokenRepository(val ctx: Context) {
     companion object {
+        const val PREF_IP = "cpu:sdk:prefs:ip"
         const val TOKEN_PREF = "cpu:sdk:prefs:token"
         const val FCM_TOKEN_PREF = "cpu:sdk:prefs:fcm_token"
     }
 
     private val prefs = PreferenceManager.getDefaultSharedPreferences(ctx)
-    val events = PublishSubject.create<TokenInfo>()
+    val events = BehaviorSubject.create<TokenInfo>()
+    val ipEvents = BehaviorSubject.create<String>()
 
     init {
-        generateToken()
+        val token = generateToken()
+        events.onNext(TokenInfo(token, prefs.getString(FCM_TOKEN_PREF, "") ?: ""))
     }
 
     fun token(): String {
@@ -45,5 +48,14 @@ class TokenRepository(ctx: Context) {
     fun saveFcmToken(fcmToken: String) {
         prefs.edit().putString(FCM_TOKEN_PREF, fcmToken).apply()
         events.onNext(TokenInfo(token(), fcmToken))
+    }
+
+    fun id(): String {
+        return "random id"
+    }
+
+    fun saveIp(ip: String) {
+        prefs.edit().putString(PREF_IP, ip).apply()
+        ipEvents.onNext(ip)
     }
 }

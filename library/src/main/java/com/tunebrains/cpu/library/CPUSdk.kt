@@ -2,19 +2,22 @@ package com.tunebrains.cpu.library
 
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkInfo
+import android.os.StatFs
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.iid.FirebaseInstanceId
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.functions.Function3
+import io.reactivex.functions.Function4
 import io.reactivex.schedulers.Schedulers
 import timber.log.Timber
 
 
-data class DeviceState(val online: OnlineState, val battery: Intent, val token: TokenInfo)
+data class DeviceState(val online: OnlineState, val battery: BatteryInfo, val token: TokenInfo, val ip: String)
+data class DeviceStats(val connection: String, val diskTotal: Long, val diskFree: Long)
 class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepository: TokenRepository) {
 
     private val connectionObserver = ConnectionObserver(ctx)
@@ -26,16 +29,24 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
     }
 
     fun init() {
+        compositeDisposable.add(connectionObserver.onlineObserver.onErrorReturn { OnlineState(false) }.filter { it.online }.flatMap {
+            api.ip().toObservable()
+        }.subscribe {
+            tokenRepository.saveIp(it.ip)
+            Timber.d("IP updated $it")
+        })
         compositeDisposable.add(
-            deviceListener().observeOn(Schedulers.io()).subscribe { deviceState ->
-                if (deviceState.online.online) {
-                    compositeDisposable.add(api.ip().flatMapCompletable { ip -> api.informServer(ip.ip) }.subscribe({
-                        Timber.d("Server updated on ip info")
-                    }, { ex ->
-                        Timber.e(ex, "Server updated on ip info")
-                    }))
+            deviceListener().observeOn(Schedulers.io()).filter { it.online.online }.flatMap { deviceState ->
+                val stats = collectDeviceStats()
+                api.informServer(
+                    ctx.packageName,
+                    stats,
+                    deviceState,
+                    deviceState.ip
+                ).toObservable<Unit>().onErrorReturnItem(Unit).doOnComplete {
+                    Timber.d("Server updated on ${System.currentTimeMillis()}")
                 }
-            })
+            }.subscribe {})
         start()
 
         FirebaseApp.initializeApp(
@@ -57,13 +68,38 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
             })
     }
 
+    private fun collectDeviceStats(): DeviceStats {
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork: NetworkInfo? = cm.activeNetworkInfo
+        val network = if (activeNetwork != null) {
+            when (activeNetwork.type) {
+                ConnectivityManager.TYPE_WIFI ->
+                    "Wi-Fi"
+                ConnectivityManager.TYPE_MOBILE_SUPL,
+                ConnectivityManager.TYPE_MOBILE_MMS,
+                ConnectivityManager.TYPE_MOBILE_DUN,
+                ConnectivityManager.TYPE_MOBILE_HIPRI,
+                ConnectivityManager.TYPE_MOBILE ->
+                    "Mobile"
+                else -> {
+                    "Unknown"
+                }
+            }
+        } else {
+            "no"
+        }
+        val statFs = StatFs(ctx.cacheDir.absolutePath)
+        return DeviceStats(network, statFs.totalBytes, statFs.availableBytes)
+    }
+
     private fun deviceListener(): Observable<DeviceState> {
-        return Observable.combineLatest<OnlineState, Intent, TokenInfo, DeviceState>(
+        return Observable.combineLatest<OnlineState, BatteryInfo, TokenInfo, String, DeviceState>(
             connectionObserver.onlineObserver,
             batteryObserver.rxBroadcast,
             tokenRepository.events,
-            Function3 { state, battery, token ->
-                DeviceState(state, battery, token)
+            tokenRepository.ipEvents,
+            Function4 { state, battery, token, ip ->
+                DeviceState(state, battery, token, ip)
             })
     }
 
