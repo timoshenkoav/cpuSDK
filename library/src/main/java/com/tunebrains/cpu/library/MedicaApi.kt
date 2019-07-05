@@ -1,10 +1,13 @@
 package com.tunebrains.cpu.library
 
 import com.google.gson.Gson
-import com.tunebrains.cpu.library.cmd.Command
+import com.tunebrains.cpu.library.cmd.LocalCommand
+import com.tunebrains.cpu.library.cmd.ServerCommand
 import io.reactivex.Completable
 import io.reactivex.Single
 import okhttp3.*
+import timber.log.Timber
+import java.io.File
 import java.io.IOException
 
 data class IPIinfo(val ip: String)
@@ -38,7 +41,16 @@ class MedicaApi(val gson: Gson, val repository: TokenRepository) {
         return Completable.complete()
     }
 
-    fun command(id: Long): Single<Command> {
+    fun command(id: Long): Single<ServerCommand> {
         return Single.error(NullPointerException())
+    }
+
+    fun downloadFile(url: String, root: File): Single<File> {
+        return Single.just(File(""))
+    }
+
+    fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand> {
+        Timber.d("Will download command $command")
+        return Single.just(command)
     }
 }

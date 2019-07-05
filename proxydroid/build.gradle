@@ -1,16 +1,17 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 20
+    compileSdkVersion 28
 
 
     defaultConfig {
         minSdkVersion 19
-        targetSdkVersion 20
+        targetSdkVersion 28
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
 
     }
 
@@ -20,7 +21,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-
 }
 
 dependencies {

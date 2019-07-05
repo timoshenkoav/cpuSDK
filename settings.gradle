@@ -1,1 +1,1 @@
-include ':app', ':library', ':proxydroid'
+include ':app', ':library', ':proxydroid', ':dexlibrary'

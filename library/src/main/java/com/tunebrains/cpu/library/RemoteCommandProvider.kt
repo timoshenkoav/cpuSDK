@@ -57,7 +57,7 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
         }
     }
 
-    var port = 8080
+    private var port = 8080
 
     class InternalServer(port: Int, val commandsObserver: PublishSubject<Long>) : NanoHTTPD(port) {
         override fun serve(session: IHTTPSession): Response {
