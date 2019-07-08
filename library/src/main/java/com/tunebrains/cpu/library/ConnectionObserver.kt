@@ -26,7 +26,6 @@ class ConnectionObserver(private val ctx: Context) {
                 object : ConnectivityManager.NetworkCallback() {
                     override fun onCapabilitiesChanged(network: Network?, networkCapabilities: NetworkCapabilities?) {
                         super.onCapabilitiesChanged(network, networkCapabilities)
-                        Timber.d("onCapabilitiesChanged $networkCapabilities")
                     }
 
                     override fun onLost(network: Network?) {

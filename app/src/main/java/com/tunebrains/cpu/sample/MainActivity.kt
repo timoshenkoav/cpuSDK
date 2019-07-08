@@ -1,6 +1,7 @@
 package com.tunebrains.cpu.sample
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import android.os.Environment
 import android.text.Html
@@ -74,6 +75,9 @@ class MainActivity : AppCompatActivity() {
             } else {
                 showMessage("Enter command id")
             }
+        }
+        btnLogs.setOnClickListener {
+            startActivity(Intent(this, FileActivity::class.java))
         }
     }
 

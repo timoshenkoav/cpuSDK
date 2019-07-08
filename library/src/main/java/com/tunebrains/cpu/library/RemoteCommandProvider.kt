@@ -6,7 +6,6 @@ import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
 import okhttp3.*
-import timber.log.Timber
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -24,8 +23,8 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
         compositeDisposable.add(Observable.interval(pingTimeout, TimeUnit.SECONDS).flatMap {
             ping().toObservable()
         }.subscribe {
-            Timber.d("Ping response $it")
             if (!it) {
+                compositeDisposable.clear()
                 port += 1
                 runServer()
             }
@@ -64,7 +63,6 @@ class RemoteCommandProvider(private val pingTimeout: Long = 10) {
             val method = session.method
             val url = session.uri
             val params = session.parms ?: emptyMap()
-            Timber.d("Got $method request to $url")
             return when (url) {
                 "/ping" -> {
                     Response("")
