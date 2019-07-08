@@ -20,10 +20,6 @@ import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
-    companion object {
-        const val FILE_REQUEST_CODE = 0x100
-    }
-
     private val params = mutableMapOf<String, Any>()
 
     private val dbHelper = DbHelper(this, Gson())

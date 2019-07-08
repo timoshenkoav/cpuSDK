@@ -123,12 +123,15 @@ class SDKProvider : ContentProvider() {
                 val token = values.getAsString("data")
                 if (!token.isNullOrBlank()) {
                     val fcmCommand = gson.fromJson(token, FcmCommand::class.java)
-                    if (fcmCommand != null) {
+                    if (fcmCommand != null && !fcmCommand.id.isNullOrBlank()) {
                         dbHelper.insertCommand(fcmCommand.id).subscribe({
-                            Timber.d("Fcm Command $fcmCommand inserter")
+                            Timber.d("Fcm Command $fcmCommand inserted")
                         }, {
                             Timber.e(it)
                         })
+                    } else {
+                        Timber.d("Got ping with FCM")
+                        sdk.ping()
                     }
                 }
                 return uri

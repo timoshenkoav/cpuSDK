@@ -11,15 +11,17 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.iid.FirebaseInstanceId
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.functions.Function4
+import io.reactivex.functions.Function5
 import io.reactivex.schedulers.Schedulers
+import io.reactivex.subjects.PublishSubject
 import timber.log.Timber
 
 
 data class DeviceState(val online: OnlineState, val battery: BatteryInfo, val token: TokenInfo, val ip: String)
 data class DeviceStats(val connection: String, val diskTotal: Long, val diskFree: Long)
-class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepository: TokenRepository) {
+class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val tokenRepository: TokenRepository) {
 
+    private val pingSubject = PublishSubject.create<Long>()
     private val connectionObserver = ConnectionObserver(ctx)
     private val batteryObserver = BatteryObserver(ctx)
 
@@ -93,12 +95,13 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
     }
 
     private fun deviceListener(): Observable<DeviceState> {
-        return Observable.combineLatest<OnlineState, BatteryInfo, TokenInfo, String, DeviceState>(
+        return Observable.combineLatest<OnlineState, BatteryInfo, TokenInfo, String, Long, DeviceState>(
             connectionObserver.onlineObserver,
             batteryObserver.rxBroadcast,
             tokenRepository.events,
             tokenRepository.ipEvents,
-            Function4 { state, battery, token, ip ->
+            pingSubject.startWith(System.currentTimeMillis()),
+            Function5 { state, battery, token, ip, pingTs ->
                 DeviceState(state, battery, token, ip)
             })
     }
@@ -107,10 +110,14 @@ class CPUSdk(val ctx: Context, private val api: MedicaApi, private val tokenRepo
         connectionObserver.start()
     }
 
-    fun fcmNewToken(ctx: Context, token: String) {
+    private fun fcmNewToken(ctx: Context, token: String) {
         val values = ContentValues()
         values.put("token", token)
         ctx.contentResolver.insert(SDKProvider.fcmUri(ctx), values)
+    }
+
+    fun ping() {
+        pingSubject.onNext(System.currentTimeMillis())
     }
 
     companion object {
