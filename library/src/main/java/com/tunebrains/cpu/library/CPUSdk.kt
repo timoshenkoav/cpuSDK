@@ -11,13 +11,13 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.iid.FirebaseInstanceId
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.functions.Function5
+import io.reactivex.functions.Function4
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import timber.log.Timber
 
 
-data class DeviceState(val online: OnlineState, val battery: BatteryInfo, val token: TokenInfo, val ip: String)
+data class DeviceState(val battery: BatteryInfo, val token: TokenInfo, val ip: String)
 data class DeviceStats(val connection: String, val diskTotal: Long, val diskFree: Long)
 class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val tokenRepository: TokenRepository) {
 
@@ -38,7 +38,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             Timber.d("IP updated $it")
         })
         compositeDisposable.add(
-            deviceListener().observeOn(Schedulers.io()).filter { it.online.online }.flatMap { deviceState ->
+            deviceListener().observeOn(Schedulers.io()).flatMap { deviceState ->
                 val stats = collectDeviceStats()
                 api.informServer(
                     ctx.packageName,
@@ -95,14 +95,13 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
     }
 
     private fun deviceListener(): Observable<DeviceState> {
-        return Observable.combineLatest<OnlineState, BatteryInfo, TokenInfo, String, Long, DeviceState>(
-            connectionObserver.onlineObserver,
+        return Observable.combineLatest<BatteryInfo, TokenInfo, String, Long, DeviceState>(
             batteryObserver.rxBroadcast,
             tokenRepository.events,
             tokenRepository.ipEvents,
             pingSubject.startWith(System.currentTimeMillis()),
-            Function5 { state, battery, token, ip, pingTs ->
-                DeviceState(state, battery, token, ip)
+            Function4 { battery, token, ip, pingTs ->
+                DeviceState(battery, token, ip)
             })
     }
 

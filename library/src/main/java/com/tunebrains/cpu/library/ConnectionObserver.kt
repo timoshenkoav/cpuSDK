@@ -30,8 +30,9 @@ class ConnectionObserver(private val ctx: Context) {
 
                     override fun onLost(network: Network?) {
                         super.onLost(network)
+
                         Timber.d("onLost $network")
-                        onlineObserver.onNext(OnlineState(false))
+                        onlineObserver.onNext(OnlineState(isNetworkAvailable()))
 
                     }
 
@@ -53,7 +54,7 @@ class ConnectionObserver(private val ctx: Context) {
                     override fun onAvailable(network: Network?) {
                         super.onAvailable(network)
                         Timber.d("onAvailable $network")
-                        onlineObserver.onNext(OnlineState(true))
+                        onlineObserver.onNext(OnlineState(isNetworkAvailable()))
                     }
                 })
         } else {
@@ -71,10 +72,6 @@ class ConnectionObserver(private val ctx: Context) {
     private fun isNetworkAvailable(): Boolean {
         val manager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkInfo = manager.activeNetworkInfo
-        var isAvailable = false
-        if (networkInfo != null && networkInfo.isConnected) {
-            isAvailable = true
-        }
-        return isAvailable
+        return networkInfo != null && networkInfo.isConnected
     }
 }
