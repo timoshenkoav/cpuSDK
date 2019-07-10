@@ -51,7 +51,7 @@ class TokenRepository(val ctx: Context) {
     }
 
     fun id(): String {
-        return "random id"
+        return Installation.id(ctx)
     }
 
     fun ip(): String {

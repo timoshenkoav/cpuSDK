@@ -18,6 +18,10 @@ class BatteryObserver(ctx: Context) {
         val battPct = level / scale.toFloat()
         val plugged = it.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
         BatteryInfo(battPct, plugged)
+    }.distinctUntilChanged { a, b ->
+        val aVal = (a.percent * 100).toInt()
+        val bVal = (b.percent * 100).toInt()
+        a.plugged == b.plugged && (aVal < 50 && bVal < 50 || aVal > 50 && bVal > 50)
     }
 
 }
