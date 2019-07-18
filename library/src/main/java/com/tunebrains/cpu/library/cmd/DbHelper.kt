@@ -6,12 +6,12 @@ import android.content.Context
 import android.database.Cursor
 import com.google.gson.Gson
 import com.tunebrains.cpu.dexlibrary.CommandResult
+import com.tunebrains.cpu.library.Logger
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Completable
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.reactivex.schedulers.Schedulers
-import timber.log.Timber
 
 
 interface IDbHelper {
@@ -42,7 +42,7 @@ interface IDbHelper {
 class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
     override fun deleteCommand(it: LocalCommand): Completable {
         return Completable.create { emitter ->
-            Timber.d("Will remove command $it")
+            Logger.d("Will remove command $it")
             ctx.contentResolver.delete(ContentUris.withAppendedId(SDKProvider.resultsUri(ctx), it.id), null, null)
             ctx.contentResolver.delete(ContentUris.withAppendedId(SDKProvider.commandsUri(ctx), it.id), null, null)
             emitter.onComplete()
@@ -66,7 +66,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
                     emitter.onError(NullPointerException())
                 }
             } catch (ex: Exception) {
-                Timber.e(ex)
+                Logger.e(ex)
                 emitter.onError(ex)
             } finally {
                 c?.close()
@@ -126,7 +126,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
                 }
                 emitter.onComplete()
             } catch (ex: Exception) {
-                Timber.e(ex)
+                Logger.e(ex)
                 emitter.onError(ex)
             } finally {
                 c?.close()
@@ -149,7 +149,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
                 return mapLocalCommand(c)
             }
         } catch (ex: Exception) {
-            Timber.e(ex)
+            Logger.e(ex)
         } finally {
             c?.close()
         }
@@ -183,7 +183,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
         )
     }
     override fun commandDownloaded(command: LocalCommand): Completable {
-        Timber.d("Mark command downloaded $command")
+        Logger.d("Mark command downloaded $command")
         return Completable.create { emitter ->
             val contentValues = ContentValues()
             contentValues.put("_status", LocalCommandStatus.DOWNLOADED.status)
@@ -199,7 +199,7 @@ class DbHelper(val ctx: Context, val gson: Gson) : IDbHelper {
     }
 
     override fun commandEnqueud(command: LocalCommand): Completable {
-        Timber.d("Mark command queued $command")
+        Logger.d("Mark command queued $command")
         return Completable.create { emitter ->
 
             val contentValues = ContentValues()

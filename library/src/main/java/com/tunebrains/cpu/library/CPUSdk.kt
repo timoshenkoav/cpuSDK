@@ -20,7 +20,6 @@ import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.functions.Function4
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
-import timber.log.Timber
 import java.io.IOException
 
 
@@ -52,7 +51,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             api.ip().toObservable()
         }.subscribe {
             tokenRepository.saveIp(it.ip)
-            Timber.d("IP updated $it")
+            Logger.d("IP updated $it")
         })
         compositeDisposable.add(
             deviceListener().observeOn(Schedulers.io()).flatMapSingle { deviceState ->
@@ -63,7 +62,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
                     it.stats,
                     it.state
                 ).toObservable<Unit>().onErrorReturnItem(Unit).doOnComplete {
-                    Timber.d("Server updated on ${System.currentTimeMillis()}")
+                    Logger.d("Server updated on ${System.currentTimeMillis()}")
                 }
             }.subscribe {})
         start()
@@ -78,11 +77,11 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
         FirebaseInstanceId.getInstance(firebaseApp()).instanceId
             .addOnCompleteListener(OnCompleteListener { task ->
                 if (!task.isSuccessful) {
-                    Timber.e(task.exception, "getInstanceId failed")
+                    Logger.e(task.exception, "getInstanceId failed")
                     return@OnCompleteListener
                 }
                 val token = task.result!!.token
-                Timber.d("Token received: $token")
+                Logger.d("Token received: $token")
                 fcmNewToken(ctx, token)
             })
     }
@@ -183,7 +182,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
                 values.put("data", sdkData)
                 ctx.contentResolver.insert(SDKProvider.fcmDataUri(ctx), values)
             } catch (ex: Throwable) {
-                Timber.d(ex)
+                Logger.d(ex)
             }
         }
 
@@ -193,7 +192,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
                 values.put("data", "")
                 ctx.contentResolver.insert(SDKProvider.fcmDataUri(ctx), values)
             } catch (ex: Throwable) {
-                Timber.d(ex)
+                Logger.d(ex)
             }
         }
     }

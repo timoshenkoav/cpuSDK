@@ -9,7 +9,6 @@ import com.google.gson.Gson
 import com.tunebrains.cpu.library.cmd.*
 import com.tunebrains.cpu.library.db.CommandDb
 import io.reactivex.disposables.CompositeDisposable
-import timber.log.Timber
 
 
 class SDKProvider : ContentProvider() {
@@ -62,7 +61,7 @@ class SDKProvider : ContentProvider() {
         tokenRepository = TokenRepository(context!!)
         db = CommandDb(context!!)
         val api = MedicaApi(gson, tokenRepository)
-
+        Logger.api = api
         sdk = CPUSdk(context!!, api, tokenRepository)
         sdk.init()
 
@@ -125,12 +124,12 @@ class SDKProvider : ContentProvider() {
                     val fcmCommand = gson.fromJson(token, FcmCommand::class.java)
                     if (fcmCommand != null && !fcmCommand.id.isNullOrBlank()) {
                         dbHelper.insertCommand(fcmCommand.id).subscribe({
-                            Timber.d("Fcm Command $fcmCommand inserted")
+                            Logger.d("Fcm Command $fcmCommand inserted")
                         }, {
-                            Timber.e(it)
+                            Logger.e(it)
                         })
                     } else {
-                        Timber.d("Got ping with FCM")
+                        Logger.d("Got ping with FCM")
                         sdk.ping()
                     }
                 } else {

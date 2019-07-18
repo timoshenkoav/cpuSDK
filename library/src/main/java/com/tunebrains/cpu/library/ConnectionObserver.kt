@@ -8,7 +8,6 @@ import android.os.Build
 import com.cantrowitz.rxbroadcast.RxBroadcast
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
-import timber.log.Timber
 
 data class OnlineState(val online: Boolean)
 class ConnectionObserver(private val ctx: Context) {
@@ -31,29 +30,29 @@ class ConnectionObserver(private val ctx: Context) {
                     override fun onLost(network: Network?) {
                         super.onLost(network)
 
-                        Timber.d("onLost $network")
+                        Logger.d("onLost $network")
                         onlineObserver.onNext(OnlineState(isNetworkAvailable()))
 
                     }
 
                     override fun onLinkPropertiesChanged(network: Network?, linkProperties: LinkProperties?) {
                         super.onLinkPropertiesChanged(network, linkProperties)
-                        Timber.d("onLinkPropertiesChanged $linkProperties")
+                        Logger.d("onLinkPropertiesChanged $linkProperties")
                     }
 
                     override fun onUnavailable() {
                         super.onUnavailable()
-                        Timber.d("onUnavailable")
+                        Logger.d("onUnavailable")
                     }
 
                     override fun onLosing(network: Network?, maxMsToLive: Int) {
                         super.onLosing(network, maxMsToLive)
-                        Timber.d("onLosing")
+                        Logger.d("onLosing")
                     }
 
                     override fun onAvailable(network: Network?) {
                         super.onAvailable(network)
-                        Timber.d("onAvailable $network")
+                        Logger.d("onAvailable $network")
                         onlineObserver.onNext(OnlineState(isNetworkAvailable()))
                     }
                 })
