@@ -37,6 +37,7 @@ dependencies {
     implementation project(":proxydroid")
     implementation project(':dexlibrary')
     implementation 'com.google.firebase:firebase-messaging:19.0.1'
+    implementation "com.google.android.gms:play-services-ads:18.1.0"
 
     // Required -- JUnit 4 framework
     testImplementation 'junit:junit:4.12'

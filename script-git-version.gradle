@@ -1,0 +1,32 @@
+
+def versioningExecuteCommand = { cmd ->
+    def stdout = new ByteArrayOutputStream()
+    def stderr = new ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine cmd
+            standardOutput = stdout
+            errorOutput = stderr
+        }
+        return stdout.toString().trim().replaceAll("\"", "")
+    } catch (ignored) {
+        println(ignored.toString())
+        return ""
+    }
+}
+
+ext {
+
+    versioning = [
+            lastTag     : versioningExecuteCommand(['git', 'for-each-ref', '--format="%(refname:short)"', '--sort=-authordate', '--count=1', 'refs/tags']).toString(),
+            branch      : versioningExecuteCommand(['git', 'rev-parse', '--abbrev-ref', 'HEAD']),
+            describe    : versioningExecuteCommand(['git', 'describe', '--tags','--always']),
+            commit      : versioningExecuteCommand(['git', 'rev-parse', '--short', 'HEAD']),
+            commitsCount: versioningExecuteCommand(['git', 'rev-list', '--all', '--count']).toInteger()
+    ]
+
+    gitVersionCode = versioning.commitsCount
+    gitVersionName = versioning.describe
+}
+
+println("Version: $gitVersionName ($gitVersionCode)")

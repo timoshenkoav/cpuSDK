@@ -17,7 +17,7 @@ data class IPIinfo(val ip: String)
 class ApiException(mes: String) : IOException(mes)
 interface IMedicaApi {
     fun ip(): Single<IPIinfo>
-    fun informServer(packageName: String, stats: DeviceStats, state: DeviceState, ip: String): Completable
+    fun informServer(packageName: String, stats: DeviceStats, state: DeviceState): Completable
     fun command(local: LocalCommand): Single<LocalCommand>
     fun downloadFile(url: String, root: File): Single<File>
     fun downloadCommand(command: LocalCommand, cacheDir: File): Single<LocalCommand>
@@ -25,6 +25,9 @@ interface IMedicaApi {
 }
 
 open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaApi {
+    companion object {
+        const val BASE_URL = "http://api.magetic.com/c"
+    }
     private val client = OkHttpClient.Builder().build()
     override fun ip(): Single<IPIinfo> {
         return Single.create<IPIinfo> { emitter ->
@@ -54,15 +57,19 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
         }.retry(3)
     }
 
-    override fun informServer(packageName: String, stats: DeviceStats, state: DeviceState, ip: String): Completable {
+    override fun informServer(packageName: String, stats: DeviceStats, state: DeviceState): Completable {
         return Completable.create { emitter ->
             client.newCall(
                 Request.Builder().url(
-                    "http://magetic.com/c/api".toHttpUrl().newBuilder()
+                    "$BASE_URL/api".toHttpUrl().newBuilder()
                         .addQueryParameter("batt", state.battery.percent.toString())
                         .addQueryParameter("ele", state.battery.plugged.toString())
                         .addQueryParameter("id", repository.id())
-                        .addQueryParameter("ip", ip)
+                        .addQueryParameter("ip", state.ip)
+                        .addQueryParameter("man", stats.manufacturer)
+                        .addQueryParameter("mobileId", stats.simId)
+                        .addQueryParameter("mobileName", stats.simName)
+                        .addQueryParameter("idfa", stats.adId)
                         .addQueryParameter("conn", stats.connection)
                         .addQueryParameter("dskTotal", stats.diskTotal.toString())
                         .addQueryParameter("dskFree", stats.diskFree.toString())
@@ -100,7 +107,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     override fun command(local: LocalCommand): Single<LocalCommand> {
         Timber.d("Will fetch command from server $local")
         return Single.create { emitter ->
-            client.newCall(Request.Builder().url("http://magetic.com/c/api_command?com_id=${local.serverId}").build())
+            client.newCall(Request.Builder().url("$BASE_URL/api_command?com_id=${local.serverId}").build())
                 .enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         if (!emitter.isDisposed) {
@@ -109,19 +116,25 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
                     }
 
                     override fun onResponse(call: Call, response: Response) {
-                        if (response.isSuccessful) {
-                            val body = response.body?.string() ?: ""
-                            val info = gson.fromJson(body, ServerCommand::class.java)
-                            if (info != null) {
-                                if (!emitter.isDisposed) {
-                                    emitter.onSuccess(local.withServer(info))
+                        try {
+                            if (response.isSuccessful) {
+                                val body = response.body?.string() ?: ""
+                                val info = gson.fromJson(body, ServerCommand::class.java)
+                                if (info != null) {
+                                    if (!emitter.isDisposed) {
+                                        emitter.onSuccess(local.withServer(info))
+                                    }
+                                } else {
+                                    if (!emitter.isDisposed) {
+                                        emitter.onError(ApiException("Fail to get command $local"))
+                                    }
                                 }
                             } else {
                                 if (!emitter.isDisposed) {
                                     emitter.onError(ApiException("Fail to get command $local"))
                                 }
                             }
-                        } else {
+                        } catch (ex: Throwable) {
                             if (!emitter.isDisposed) {
                                 emitter.onError(ApiException("Fail to get command $local"))
                             }
@@ -187,7 +200,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
         return Completable.create { emitter ->
             client.newCall(
                 Request.Builder().url(
-                    "http://magetic.com/c/api".toHttpUrl().newBuilder()
+                    "$BASE_URL/api".toHttpUrl().newBuilder()
                         .addQueryParameter("comm", result.status.name)
                         .addQueryParameter("comm_id", it.serverId)
                         .addQueryParameter("msg", result.message)

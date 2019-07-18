@@ -10,6 +10,7 @@ import com.tunebrains.cpu.library.IMedicaApi
 import com.tunebrains.cpu.library.SDKProvider
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import timber.log.Timber
 
@@ -19,27 +20,33 @@ interface ISDKSource {
 
 class SDKSource(val context: Context, val dbHelper: IDbHelper) : ISDKSource {
     val observer = PublishSubject.create<LocalCommand>()
+    private val compositeDisposable = CompositeDisposable()
+    private val contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri) {
+            super.onChange(selfChange, uri)
+            Timber.d("Got notification from SDKProvider on $uri")
+            compositeDisposable.add(dbHelper.localCommands().subscribeOn(Schedulers.io()).subscribe {
+                Timber.d("Loaded local command $it")
+                observer.onNext(it)
+            })
+        }
+    }
 
     init {
         context.contentResolver.registerContentObserver(
             SDKProvider.commandsUri(context),
-            true,
-            object : ContentObserver(Handler(Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean, uri: Uri) {
-                    super.onChange(selfChange, uri)
-                    Timber.d("Got notification from SDKProvider on $uri")
-                    dbHelper.localCommands().subscribe {
-                        Timber.d("Loaded local command $it")
-                        observer.onNext(it)
-                    }
-//                    val localCommand = dbHelper.localCommand(uri.lastPathSegment)
-//                    Timber.d("Loaded local command $localCommand")
-//                    localCommand?.let {
-//                        observer.onNext(it)
-//                    }
-                }
-            })
+            true, contentObserver
+        )
+
     }
+
+    fun stop() {
+        context.contentResolver.unregisterContentObserver(
+            contentObserver
+        )
+        compositeDisposable.clear()
+    }
+
     override fun observe(): Observable<LocalCommand> {
         return observer
     }
@@ -53,10 +60,11 @@ abstract class CommandProcessor(val context: Context, val source: ISDKSource, va
 class CommandEnqueuer(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(source.observe().filter {
+        compositeDisposable.add(source.observe().observeOn(Schedulers.computation()).filter {
             it.status == LocalCommandStatus.NONE
         }.flatMap { command ->
             api.command(command).toObservable().doOnError {
+                dbHelper.deleteCommand(command)
                 Timber.e(it)
             }.onErrorReturnItem(LocalCommand.ERROR)
         }.filter { it.status != LocalCommandStatus.ERROR }.flatMap {
@@ -73,10 +81,11 @@ class CommandEnqueuer(context: Context, private val api: IMedicaApi, source: ISD
 class CommandDownloader(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(source.observe().filter {
+        compositeDisposable.add(source.observe().observeOn(Schedulers.computation()).filter {
             it.status == LocalCommandStatus.QUEUED
         }.flatMap { command ->
             api.downloadCommand(command, context.cacheDir).toObservable().doOnError {
+                dbHelper.deleteCommand(command)
                 Timber.e(it)
             }.onErrorReturnItem(LocalCommand.ERROR)
         }.filter { it.status != LocalCommandStatus.ERROR }.flatMap {
@@ -93,7 +102,7 @@ class CommandDownloader(context: Context, private val api: IMedicaApi, source: I
 class CommandExecutor(context: Context, private val handler: CommandHandler, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(source.observe().filter {
+        compositeDisposable.add(source.observe().observeOn(Schedulers.computation()).filter {
             it.status == LocalCommandStatus.DOWNLOADED
         }.flatMapSingle {
             handler.execute(it, context.cacheDir).doOnError {
@@ -106,8 +115,12 @@ class CommandExecutor(context: Context, private val handler: CommandHandler, sou
                     )
                 )
             )
-        }.filter { it.command.status != LocalCommandStatus.ERROR }.flatMapCompletable {
-            dbHelper.commandExecuted(it.command, it.result)
+        }.flatMapCompletable {
+            if (it.command.status == LocalCommandStatus.ERROR) {
+                dbHelper.deleteCommand(it.command)
+            } else {
+                dbHelper.commandExecuted(it.command, it.result)
+            }
         }.subscribe({
             Timber.d("Command executed")
         }, {
@@ -119,7 +132,7 @@ class CommandExecutor(context: Context, private val handler: CommandHandler, sou
 class CommandReporter(context: Context, private val api: IMedicaApi, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(source.observe().filter {
+        compositeDisposable.add(source.observe().observeOn(Schedulers.computation()).filter {
             it.status == LocalCommandStatus.EXECUTED
         }.flatMapSingle {
             dbHelper.commandResult(it)
@@ -137,7 +150,7 @@ class CommandReporter(context: Context, private val api: IMedicaApi, source: ISD
 class CommandRemover(context: Context, source: ISDKSource, dbHelper: IDbHelper) :
     CommandProcessor(context, source, dbHelper) {
     override fun start() {
-        compositeDisposable.add(source.observe().filter {
+        compositeDisposable.add(source.observe().observeOn(Schedulers.computation()).filter {
             it.status == LocalCommandStatus.REPORTED
         }.flatMapCompletable {
             dbHelper.deleteCommand(it)

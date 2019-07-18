@@ -133,6 +133,8 @@ class SDKProvider : ContentProvider() {
                         Timber.d("Got ping with FCM")
                         sdk.ping()
                     }
+                } else {
+                    sdk.ping()
                 }
                 return uri
             }

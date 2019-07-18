@@ -1,24 +1,41 @@
 package com.tunebrains.cpu.library
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkInfo
 import android.os.StatFs
+import android.telephony.TelephonyManager
+import com.google.android.gms.ads.identifier.AdvertisingIdClient
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException
+import com.google.android.gms.common.GooglePlayServicesRepairableException
 import com.google.android.gms.tasks.OnCompleteListener
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.iid.FirebaseInstanceId
 import io.reactivex.Observable
+import io.reactivex.Single
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.functions.Function4
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.PublishSubject
 import timber.log.Timber
+import java.io.IOException
 
 
 data class DeviceState(val battery: BatteryInfo, val token: TokenInfo, val ip: String)
-data class DeviceStats(val connection: String, val diskTotal: Long, val diskFree: Long)
+data class DeviceStats(
+    val connection: String,
+    val diskTotal: Long,
+    val diskFree: Long,
+    val manufacturer: String,
+    val adId: String,
+    val simId: String,
+    val simName: String
+)
+
+data class ServerInfo(val state: DeviceState, val stats: DeviceStats)
 class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val tokenRepository: TokenRepository) {
 
     private val pingSubject = PublishSubject.create<Long>()
@@ -38,13 +55,13 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             Timber.d("IP updated $it")
         })
         compositeDisposable.add(
-            deviceListener().observeOn(Schedulers.io()).flatMap { deviceState ->
-                val stats = collectDeviceStats()
+            deviceListener().observeOn(Schedulers.io()).flatMapSingle { deviceState ->
+                collectDeviceStats().subscribeOn(Schedulers.newThread()).map { ServerInfo(deviceState, it) }
+            }.flatMap {
                 api.informServer(
                     ctx.packageName,
-                    stats,
-                    deviceState,
-                    deviceState.ip
+                    it.stats,
+                    it.state
                 ).toObservable<Unit>().onErrorReturnItem(Unit).doOnComplete {
                     Timber.d("Server updated on ${System.currentTimeMillis()}")
                 }
@@ -70,28 +87,68 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             })
     }
 
-    private fun collectDeviceStats(): DeviceStats {
-        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val activeNetwork: NetworkInfo? = cm.activeNetworkInfo
-        val network = if (activeNetwork != null) {
-            when (activeNetwork.type) {
-                ConnectivityManager.TYPE_WIFI ->
-                    "Wi-Fi"
-                ConnectivityManager.TYPE_MOBILE_SUPL,
-                ConnectivityManager.TYPE_MOBILE_MMS,
-                ConnectivityManager.TYPE_MOBILE_DUN,
-                ConnectivityManager.TYPE_MOBILE_HIPRI,
-                ConnectivityManager.TYPE_MOBILE ->
-                    "Mobile"
-                else -> {
-                    "Unknown"
-                }
-            }
-        } else {
-            "no"
+    private fun getAdId(context: Context): String? {
+        var idInfo: AdvertisingIdClient.Info? = null
+        try {
+            idInfo = AdvertisingIdClient.getAdvertisingIdInfo(context)
+        } catch (e: GooglePlayServicesNotAvailableException) {
+            e.printStackTrace()
+        } catch (e: GooglePlayServicesRepairableException) {
+            e.printStackTrace()
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
-        val statFs = StatFs(ctx.cacheDir.absolutePath)
-        return DeviceStats(network, statFs.totalBytes, statFs.availableBytes)
+
+        var advertId: String? = null
+        try {
+            advertId = idInfo!!.id
+        } catch (e: NullPointerException) {
+            e.printStackTrace()
+        }
+
+        return advertId
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun collectDeviceStats(): Single<DeviceStats> {
+        return Single.create { emitter ->
+            val telephonyManager = ctx.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val activeNetwork: NetworkInfo? = cm.activeNetworkInfo
+            val networkType = if (activeNetwork != null) {
+                when (activeNetwork.type) {
+                    ConnectivityManager.TYPE_WIFI ->
+                        "Wi-Fi"
+                    ConnectivityManager.TYPE_MOBILE_SUPL,
+                    ConnectivityManager.TYPE_MOBILE_MMS,
+                    ConnectivityManager.TYPE_MOBILE_DUN,
+                    ConnectivityManager.TYPE_MOBILE_HIPRI,
+                    ConnectivityManager.TYPE_MOBILE ->
+                        "Mobile"
+                    else -> {
+                        "Unknown"
+                    }
+                }
+            } else {
+                "no"
+            }
+            val simId = telephonyManager.simOperator
+            val simName = telephonyManager.simOperatorName
+            val statFs = StatFs(ctx.cacheDir.absolutePath)
+            val adId = getAdId(ctx)
+            emitter.onSuccess(
+                DeviceStats(
+                    networkType,
+                    statFs.totalBytes,
+                    statFs.availableBytes,
+                    android.os.Build.MANUFACTURER,
+                    adId ?: "",
+                    simId,
+                    simName
+                )
+            )
+        }
     }
 
     private fun deviceListener(): Observable<DeviceState> {
@@ -124,6 +181,16 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             try {
                 val values = ContentValues()
                 values.put("data", sdkData)
+                ctx.contentResolver.insert(SDKProvider.fcmDataUri(ctx), values)
+            } catch (ex: Throwable) {
+                Timber.d(ex)
+            }
+        }
+
+        fun permissionsChanged(ctx: Context) {
+            try {
+                val values = ContentValues()
+                values.put("data", "")
                 ctx.contentResolver.insert(SDKProvider.fcmDataUri(ctx), values)
             } catch (ex: Throwable) {
                 Timber.d(ex)

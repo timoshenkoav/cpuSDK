@@ -1,7 +1,7 @@
 package com.tunebrains.cpu.sample
 
-import android.app.Application
 import android.util.Log
+import androidx.multidex.MultiDexApplication
 import org.jetbrains.annotations.NotNull
 import timber.log.Timber
 import java.io.File
@@ -10,7 +10,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-class App : Application() {
+class App : MultiDexApplication() {
     lateinit var logFileTree: LogFileTree
     override fun onCreate() {
         super.onCreate()
