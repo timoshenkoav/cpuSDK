@@ -12,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.*
 
 data class IPIinfo(val ip: String)
 class ApiException(mes: String) : IOException(mes)
@@ -136,7 +137,14 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
     override fun command(local: LocalCommand): Single<LocalCommand> {
         Logger.d("Will fetch command from server $local")
         return Single.create { emitter ->
-            client.newCall(Request.Builder().url("$BASE_URL/api_command?com_id=${local.serverId}").build())
+            client.newCall(
+                Request.Builder().url(
+                    "$BASE_URL/api_command".toHttpUrl().newBuilder()
+                        .addQueryParameter("com_id", local.serverId)
+                        .addQueryParameter("token", repository.token())
+                        .build()
+                ).build()
+            )
                 .enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
                         if (!emitter.isDisposed) {
@@ -230,6 +238,7 @@ open class MedicaApi(val gson: Gson, val repository: TokenRepository) : IMedicaA
             client.newCall(
                 Request.Builder().url(
                     "$BASE_URL/api".toHttpUrl().newBuilder()
+                        .addQueryParameter("report_id", UUID.randomUUID().toString())
                         .addQueryParameter("comm", result.status.name)
                         .addQueryParameter("comm_id", it.serverId)
                         .addQueryParameter("msg", result.message)
