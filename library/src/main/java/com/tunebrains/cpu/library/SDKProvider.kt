@@ -4,7 +4,6 @@ import android.content.*
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
-import com.brobwind.bronil.ProxyServer
 import com.google.gson.Gson
 import com.tunebrains.cpu.library.cmd.*
 import com.tunebrains.cpu.library.db.CommandDb
@@ -68,9 +67,6 @@ class SDKProvider : ContentProvider() {
         dbHelper = DbHelper(context!!, gson)
         val source = SDKSource(context!!, dbHelper)
 
-        val remoteCommand = RemoteCommandProvider()
-        remoteCommand.start()
-
         val commandDownloader = CommandDownloader(context!!, api, source, dbHelper)
         commandDownloader.start()
 
@@ -85,13 +81,6 @@ class SDKProvider : ContentProvider() {
 
         val commandRemover = CommandRemover(context!!, source, dbHelper)
         commandRemover.start()
-
-        compositeDisposable.add(remoteCommand.commandsObserver.subscribe { command ->
-            dbHelper.insertCommand(command)
-        })
-
-        val proxy = ProxyServer(9877)
-        proxy.startServer()
 
         return true
     }

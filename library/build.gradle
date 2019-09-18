@@ -34,8 +34,6 @@ dependencies {
     api 'com.jakewharton.timber:timber:4.7.1'
     api 'com.cantrowitz:rxbroadcast:2.0.0'
     api 'com.google.code.gson:gson:2.8.5'
-    api 'com.nanohttpd:nanohttpd-webserver:2.1.1'
-    api project(":proxydroid")
     api project(':dexlibrary')
     implementation 'com.google.firebase:firebase-messaging:19.0.1'
     implementation "com.google.android.gms:play-services-ads:18.1.0"
