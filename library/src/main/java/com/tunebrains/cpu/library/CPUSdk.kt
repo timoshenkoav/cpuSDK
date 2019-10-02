@@ -69,7 +69,7 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
 
         FirebaseApp.initializeApp(
             ctx, FirebaseOptions.Builder()
-                .setApplicationId("1:106118336429:android:5ff935ed04ee8bcf")
+                .setApplicationId("1:1044521188963:android:ba07a84230db37e8")
                 .setProjectId("medicasdk-dev")
                 .build(), "[MEDICA_SDK]"
         )
