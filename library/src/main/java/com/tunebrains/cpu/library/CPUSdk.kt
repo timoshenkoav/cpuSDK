@@ -11,8 +11,6 @@ import com.google.android.gms.ads.identifier.AdvertisingIdClient
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException
 import com.google.android.gms.common.GooglePlayServicesRepairableException
 import com.google.android.gms.tasks.OnCompleteListener
-import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
 import com.google.firebase.iid.FirebaseInstanceId
 import io.reactivex.Observable
 import io.reactivex.Single
@@ -42,9 +40,9 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
     private val batteryObserver = BatteryObserver(ctx)
 
     private val compositeDisposable = CompositeDisposable()
-    private fun firebaseApp(): FirebaseApp {
-        return FirebaseApp.getInstance("[MEDICA_SDK]")
-    }
+//    private fun firebaseApp(): FirebaseApp {
+//        return FirebaseApp.getInstance("[MEDICA_SDK]")
+//    }
 
     fun init() {
         compositeDisposable.add(connectionObserver.onlineObserver.onErrorReturn { OnlineState(false) }.filter { it.online }.flatMap {
@@ -67,14 +65,14 @@ class CPUSdk(private val ctx: Context, private val api: MedicaApi, private val t
             }.subscribe {})
         start()
 
-        FirebaseApp.initializeApp(
-            ctx, FirebaseOptions.Builder()
-                .setApplicationId("1:1044521188963:android:ba07a84230db37e8")
-                .setProjectId("medicasdk-dev")
-                .build(), "[MEDICA_SDK]"
-        )
+//        FirebaseApp.initializeApp(
+//            ctx, FirebaseOptions.Builder()
+//                .setApplicationId("1:1044521188963:android:ba07a84230db37e8")
+//                .setProjectId("medicasdk-dev")
+//                .build(), "[MEDICA_SDK]"
+//        )
 
-        FirebaseInstanceId.getInstance(firebaseApp()).instanceId
+        FirebaseInstanceId.getInstance().instanceId
             .addOnCompleteListener(OnCompleteListener { task ->
                 if (!task.isSuccessful) {
                     Logger.e(task.exception, "getInstanceId failed")
