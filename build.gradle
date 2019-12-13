@@ -22,6 +22,13 @@ allprojects {
         google()
         jcenter()
         maven { url 'https://jitpack.io' }
+        maven {
+            url 'https://maven.pkg.github.com/timoshenkoav/cpuSDK'
+            credentials {
+                username = 'tunebrains'
+                password = '8e8cc4840e2c57e14730a081d7bae01d73cbe55e'
+            }
+        }
         
     }
 }

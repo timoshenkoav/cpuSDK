@@ -1,6 +1,9 @@
-apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
-apply plugin: 'com.github.dcendents.android-maven'
+plugins{
+    id 'com.android.library'
+    id 'kotlin-android'
+    id 'digital.wup.android-maven-publish' version '3.6.2'
+}
+
 
 android {
     compileSdkVersion 28
@@ -44,4 +47,24 @@ dependencies {
     testImplementation 'androidx.test:core:1.2.0'
     // Optional -- Mockito framework
     testImplementation 'org.mockito:mockito-core:1.10.19'
+}
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/timoshenkoav/cpuSDK")
+            credentials {
+                username = 'timoshenkoav'
+                password = 'c69e4ff542cb95a97205fa7a70f6dc477274bb43'
+            }
+        }
+    }
+    publications {
+        maven(MavenPublication) {
+            groupId 'com.timoshenkoav'
+            artifactId 'cpu-sdk'
+            version "0.0.3"
+            from(components.android)
+        }
+    }
 }

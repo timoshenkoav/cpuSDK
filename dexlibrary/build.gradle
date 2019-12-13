@@ -1,5 +1,8 @@
-apply plugin: 'com.android.library'
-apply plugin: 'com.github.dcendents.android-maven'
+plugins{
+    id 'com.android.library'
+    id 'digital.wup.android-maven-publish' version '3.6.2'
+}
+
 
 android {
     compileSdkVersion 28
@@ -28,4 +31,24 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/timoshenkoav/cpuSDK")
+            credentials {
+                username = 'timoshenkoav'
+                password = 'c69e4ff542cb95a97205fa7a70f6dc477274bb43'
+            }
+        }
+    }
+    publications {
+        maven(MavenPublication) {
+            groupId 'com.timoshenkoav'
+            artifactId 'dexlibrary'
+            version "0.0.3"
+            from(components.android)
+        }
+    }
 }
